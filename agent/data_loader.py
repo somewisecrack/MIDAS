@@ -146,27 +146,27 @@ def update_data_from_yfinance(tickers: list, progress_callback=None, force_full_
     
     ensure_data_dir()
     filepath = DATA_FILES["daily"]
+    df_existing = pd.DataFrame()
+    if filepath.exists():
+        try:
+            df_existing = pd.read_csv(filepath)
+            if not df_existing.empty and "Date" in df_existing.columns:
+                df_existing["Date"] = pd.to_datetime(df_existing["Date"]).dt.tz_localize(None)
+        except Exception:
+            df_existing = pd.DataFrame()
     
     if force_full_refresh:
         start_fetch = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-        df_existing = pd.DataFrame()
     else:
-        df_existing = pd.DataFrame()
-        if filepath.exists():
-            try:
-                df_existing = pd.read_csv(filepath)
-            except:
-                pass
-        
         if not df_existing.empty and "Date" in df_existing.columns:
-            df_existing["Date"] = pd.to_datetime(df_existing["Date"]).dt.tz_localize(None)
             latest_date = df_existing["Date"].max()
             start_fetch = latest_date.strftime("%Y-%m-%d")
         else:
             start_fetch = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
     
-    batch_size = 50
+    batch_size = 25
     all_new_data = []
+    updated_tickers = set()
     
     for i in tqdm(range(0, len(tickers), batch_size)):
         batch = tickers[i:i + batch_size]
@@ -204,6 +204,7 @@ def update_data_from_yfinance(tickers: list, progress_callback=None, force_full_
                     
                     t_df["Ticker"] = ticker
                     all_new_data.append(t_df)
+                    updated_tickers.add(ticker)
                     results["success"] += 1
                     
                 except Exception as e:
@@ -218,8 +219,13 @@ def update_data_from_yfinance(tickers: list, progress_callback=None, force_full_
     if all_new_data:
         new_df = pd.concat(all_new_data, ignore_index=True)
         new_df["Date"] = pd.to_datetime(new_df["Date"])
-        
-        final_df = pd.concat([df_existing, new_df], ignore_index=True)
+
+        if force_full_refresh and not df_existing.empty:
+            fallback_df = df_existing[~df_existing["Ticker"].isin(updated_tickers)].copy()
+            final_df = pd.concat([fallback_df, new_df], ignore_index=True)
+        else:
+            final_df = pd.concat([df_existing, new_df], ignore_index=True)
+
         final_df = final_df.drop_duplicates(
             subset=["Ticker", "Date"], 
             keep="last"
@@ -227,8 +233,10 @@ def update_data_from_yfinance(tickers: list, progress_callback=None, force_full_
         
         final_df.to_csv(filepath, index=False)
         results["updated"] = True
+        results["preserved"] = 0 if df_existing.empty else len(set(df_existing["Ticker"].unique()) - updated_tickers)
     else:
         results["updated"] = False
+        results["preserved"] = len(df_existing["Ticker"].unique()) if not df_existing.empty else 0
     
     return results
 

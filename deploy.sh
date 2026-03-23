@@ -64,7 +64,15 @@ gcloud run deploy ${SERVICE_NAME} \
     --cpu 2 \
     --timeout 600s \
     --max-instances 1 \
+    --set-env-vars USE_TLS=true \
     --set-secrets SMTP_EMAIL=smtp-email:latest,SMTP_PASSWORD=smtp-password:latest \
+    --quiet
+
+# Ensure manual curl and Cloud Scheduler can invoke the service
+gcloud run services add-iam-policy-binding ${SERVICE_NAME} \
+    --region ${REGION} \
+    --member="allUsers" \
+    --role="roles/run.invoker" \
     --quiet
 
 # Get service URL
@@ -80,12 +88,23 @@ echo ""
 
 # Set up Cloud Scheduler
 echo "Setting up Cloud Scheduler for 4 PM ET on weekdays..."
-gcloud scheduler jobs create http daily-scan \
-    --schedule="0 21 * * 1-5" \
-    --uri="${SERVICE_URL}/scan" \
-    --http-method=POST \
-    --time-zone="America/New_York" \
-    --quiet 2>/dev/null || echo "  (Scheduler job may already exist)"
+if gcloud scheduler jobs describe daily-scan --location ${REGION} >/dev/null 2>&1; then
+    gcloud scheduler jobs update http daily-scan \
+        --location=${REGION} \
+        --schedule="0 21 * * 1-5" \
+        --uri="${SERVICE_URL}/scan" \
+        --http-method=POST \
+        --time-zone="America/New_York" \
+        --quiet
+else
+    gcloud scheduler jobs create http daily-scan \
+        --location=${REGION} \
+        --schedule="0 21 * * 1-5" \
+        --uri="${SERVICE_URL}/scan" \
+        --http-method=POST \
+        --time-zone="America/New_York" \
+        --quiet
+fi
 
 echo ""
 echo "=========================================="

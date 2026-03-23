@@ -26,8 +26,13 @@ ENV/
 
 # Results and data outputs
 results/
-*.csv
+results/**/*.csv
 *.parquet
+
+# Ignore generated market data except the bundled daily universe file
+data/*.csv
+!data/
+!data/tickers_ohlcv.csv
 
 # Logs
 *.log

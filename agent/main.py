@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def run_scan():
     print("=" * 60)
-    print("  TRADING AGENT - SCAN MODE")
+    print("  MIDAS - SCAN MODE")
     print("=" * 60)
     print()
     
@@ -19,7 +19,8 @@ def run_scan():
     from agent.data_loader import load_all_tickers, update_data_from_yfinance
     
     print("Loading data...")
-    _, tickers = load_all_tickers()
+    _, sp500_tickers, other_tickers = load_all_tickers()
+    tickers = sp500_tickers + other_tickers
     print(f"  {len(tickers)} tickers loaded")
     
     print("\nUpdating data from Yahoo Finance...")
@@ -38,12 +39,12 @@ def run_scan():
     
     print("\nSending email notification...")
     notifier = get_notification_service()
-    notifier.send_scan_complete(
+    email_sent = notifier.send_scan_complete(
         recommendations=[r.model_dump() for r in result.recommendations],
         regime=result.regime,
         scan_time=result.scan_time
     )
-    print("  Email sent!")
+    print("  Email sent!" if email_sent else "  Email failed!")
     
     print()
     print("=" * 60)
@@ -66,19 +67,40 @@ def create_server_app():
         try:
             _, sp500_tickers, other_tickers = load_all_tickers()
             all_tickers = sp500_tickers + other_tickers
-            results = update_data_from_yfinance(all_tickers, force_full_refresh=True)
+            update_results = update_data_from_yfinance(all_tickers, force_full_refresh=True)
             
             scanner = Scanner()
             result = scanner.scan()
+
+            expected_count = 40
+            if len(result.recommendations) < expected_count:
+                return {
+                    "status": "error",
+                    "message": f"Scan completed but produced {len(result.recommendations)} recommendations, expected {expected_count}.",
+                    "regime": result.regime,
+                    "count": len(result.recommendations),
+                    "sp500_scanned": result.sp500_scanned,
+                    "other_scanned": result.other_scanned,
+                    "update_results": update_results
+                }
             
             notifier = get_notification_service()
-            notifier.send_scan_complete(
+            email_sent = notifier.send_scan_complete(
                 recommendations=[r.model_dump() for r in result.recommendations],
                 regime=result.regime,
                 scan_time=result.scan_time,
                 sp500_count=result.sp500_scanned,
                 other_count=result.other_scanned
             )
+            if not email_sent:
+                return {
+                    "status": "error",
+                    "message": "Scan completed but email delivery failed.",
+                    "regime": result.regime,
+                    "count": len(result.recommendations),
+                    "sp500_scanned": result.sp500_scanned,
+                    "other_scanned": result.other_scanned
+                }
             
             return {
                 "status": "success",
@@ -86,7 +108,8 @@ def create_server_app():
                 "regime": result.regime,
                 "count": len(result.recommendations),
                 "sp500_scanned": result.sp500_scanned,
-                "other_scanned": result.other_scanned
+                "other_scanned": result.other_scanned,
+                "update_results": update_results
             }
         except Exception as e:
             return {
@@ -118,8 +141,8 @@ def main():
         return
     
     print("=" * 60)
-    print("  TRADING AGENT v2.0")
-    print("  AI-Powered Strategy Scanner")
+    print("  MIDAS v2.0")
+    print("  Automated Strategy Scanner")
     print("=" * 60)
     print()
     

@@ -19,7 +19,7 @@ class NotificationService:
         self.pushover_user = os.getenv("PUSHOVER_USER")
         self.smtp_email = os.getenv("SMTP_EMAIL")
         self.smtp_password = os.getenv("SMTP_PASSWORD")
-        self.use_tls = os.getenv("USE_TLS", "false").lower() == "true"
+        self.use_tls = os.getenv("USE_TLS", "true").lower() == "true"
         self.notification_enabled = any([
             self.pushover_token,
             self.smtp_email and self.smtp_password,
@@ -34,21 +34,25 @@ class NotificationService:
         other_count: int = 0
     ):
         if not recommendations:
-            return
+            return False
         
         message = self._format_html_email(recommendations, regime, scan_time, sp500_count, other_count)
         
         subject = f"📊 MIDAS: {regime} Market | {len(recommendations)} Trades (S&P500 + Other)"
         
+        sent = False
+        
         if self.pushover_token and self.pushover_user:
-            self._send_pushover(message, subject)
+            sent = self._send_pushover(message, subject) or sent
         
         if self.smtp_email and self.smtp_password:
-            self._send_email(
+            sent = self._send_email(
                 subject=subject,
                 body=message,
                 to_email=self.smtp_email
-            )
+            ) or sent
+        
+        return sent
     
     def send_alert(
         self, 
@@ -276,6 +280,7 @@ Time: {datetime.now().strftime('%Y-%m-%d %H:%M ET')}
             return False
     
     def _send_email(self, subject: str, body: str, to_email: str):
+        last_error = None
         try:
             msg = MIMEMultipart()
             msg["From"] = self.smtp_email
@@ -288,16 +293,23 @@ Time: {datetime.now().strftime('%Y-%m-%d %H:%M ET')}
                     server.starttls()
                     server.login(self.smtp_email, self.smtp_password)
                     server.send_message(msg)
-            else:
+                return True
+        except Exception as e:
+            last_error = e
+            print(f"STARTTLS email error: {e}")
+
+        try:
+            if not self.use_tls:
                 context = ssl.create_default_context()
                 with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
                     server.login(self.smtp_email, self.smtp_password)
                     server.send_message(msg)
-            
-            return True
+                return True
         except Exception as e:
-            print(f"Email error: {e}")
-            return False
+            last_error = e
+
+        print(f"Email error: {last_error}")
+        return False
 
 
 _notification_service = None
