@@ -93,17 +93,19 @@ echo "Setting up Cloud Scheduler for 4 PM ET on weekdays..."
 if gcloud scheduler jobs describe daily-scan --location ${REGION} >/dev/null 2>&1; then
     gcloud scheduler jobs update http daily-scan \
         --location=${REGION} \
-        --schedule="0 21 * * 1-5" \
+        --schedule="0 16 * * 1-5" \
         --uri="${SERVICE_URL}/scan" \
         --http-method=POST \
+        --attempt-deadline=900s \
         --time-zone="America/New_York" \
         --quiet
 else
     gcloud scheduler jobs create http daily-scan \
         --location=${REGION} \
-        --schedule="0 21 * * 1-5" \
+        --schedule="0 16 * * 1-5" \
         --uri="${SERVICE_URL}/scan" \
         --http-method=POST \
+        --attempt-deadline=900s \
         --time-zone="America/New_York" \
         --quiet
 fi
