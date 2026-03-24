@@ -14,7 +14,8 @@ def test_email():
     
     if not notifier.smtp_email:
         print("ERROR: SMTP_EMAIL not configured in .env file")
-        print("\nEdit /Users/rahulgirishkumar/TRADING/.env and add your credentials:")
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        print(f"\nEdit {env_path} and add your credentials:")
         print("  SMTP_EMAIL=your_email@gmail.com")
         print("  SMTP_PASSWORD=your_app_password")
         return False

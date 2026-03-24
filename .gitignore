@@ -25,14 +25,14 @@ ENV/
 .LSOverride
 
 # Results and data outputs
-results/
-results/**/*.csv
+MIDAS/results/
+MIDAS/results/**/*.csv
 *.parquet
 
 # Ignore generated market data except the bundled daily universe file
-data/*.csv
-!data/
-!data/tickers_ohlcv.csv
+MIDAS/data/*.csv
+!MIDAS/data/
+!MIDAS/data/tickers_ohlcv.csv
 
 # Logs
 *.log

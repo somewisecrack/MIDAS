@@ -4,6 +4,8 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 PROJECT_ID="${1:-}"
 REGION="${2:-us-central1}"
 
@@ -50,7 +52,7 @@ echo "  (Or set them via Cloud Console: https://console.cloud.google.com/securit
 # Build the image
 echo ""
 echo "[4/5] Building Docker image..."
-gcloud builds submit --tag ${IMAGE_NAME} --timeout=10m --quiet
+gcloud builds submit "${SCRIPT_DIR}" --tag ${IMAGE_NAME} --timeout=10m --quiet
 
 # Deploy to Cloud Run
 echo ""

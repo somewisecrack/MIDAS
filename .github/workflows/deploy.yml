@@ -1,4 +1,4 @@
-name: Deploy Trading Agent
+name: Deploy MIDAS
 
 on:
   push:
@@ -24,16 +24,16 @@ jobs:
       - name: Build and Deploy
         run: |
           PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-          IMAGE_NAME="gcr.io/${PROJECT_ID}/trading-agent"
+          IMAGE_NAME="gcr.io/${PROJECT_ID}/midas"
           
           # Build
-          docker build -t ${IMAGE_NAME} .
+          docker build -t ${IMAGE_NAME} ./MIDAS
           
           # Push
           docker push ${IMAGE_NAME}
           
           # Deploy
-          gcloud run deploy trading-agent \
+          gcloud run deploy midas \
             --image ${IMAGE_NAME} \
             --platform managed \
             --region us-central1 \
@@ -41,4 +41,6 @@ jobs:
             --memory 2Gi \
             --cpu 2 \
             --timeout 600s \
-            --max-instances 1
+            --max-instances 1 \
+            --set-env-vars USE_TLS=true \
+            --set-secrets SMTP_EMAIL=smtp-email:latest,SMTP_PASSWORD=smtp-password:latest
