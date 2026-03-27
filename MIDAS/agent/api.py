@@ -78,8 +78,8 @@ async def data_status():
 @app.post("/api/data/update", response_model=UpdateResponse)
 async def update_data():
     try:
-        _, tickers = load_all_tickers()
-        results = update_data_from_yfinance(tickers)
+        _, sp500_tickers, other_tickers = load_all_tickers()
+        results = update_data_from_yfinance(sp500_tickers + other_tickers)
         
         if results.get("updated"):
             return UpdateResponse(

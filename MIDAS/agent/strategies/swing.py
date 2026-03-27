@@ -178,7 +178,7 @@ def vpa_selling_climax(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
     if (
         last["Volume_Ratio"] > 2.0 and
         last["Upper_Wick"] > 0.40 and
-        prev["Close"] < prev["Low"]
+        prev["Close"] < prev["Open"]
     ):
         price = prev["Close"]
         stop = prev["High"]
@@ -218,7 +218,7 @@ def vpa_topping_out(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         last["Close"] > last["EMA50"] and
         last["Volume_Ratio"] > 1.5 and
         last["Spread"] < last["Prev_Spread"] * 0.5 and
-        prev["Close"] < prev["Low"]
+        prev["Close"] < prev["Open"]
     ):
         price = prev["Close"]
         stop = prev["High"]
@@ -442,7 +442,7 @@ def three_little_indians(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
     last = df.iloc[-1]
     prev = df.iloc[-2]
     
-    if peaks >= 3 and prev["Close"] < prev["Low"]:
+    if peaks >= 3 and prev["Close"] < prev["Open"]:
         price = prev["Close"]
         stop = prev["High"]
         return {
@@ -555,7 +555,7 @@ def alpha_011(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         return None
     
     typical = (df["High"] + df["Low"] + df["Close"]) / 3
-    df["VWAP"] = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
+    df["VWAP"] = (typical * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum()
     df["VWAP_Diff"] = df["VWAP"] - df["Close"]
     
     rank_max = ts_rank(df["VWAP_Diff"].rolling(3).max(), 3)

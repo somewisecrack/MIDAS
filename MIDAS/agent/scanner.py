@@ -2,6 +2,9 @@ from typing import Dict, List, Optional
 import pandas as pd
 from datetime import datetime
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 from agent.data_loader import (
     load_all_tickers, 
@@ -156,11 +159,12 @@ class Scanner:
                     result["confidence"] = int(base_confidence * meta["weight_modifier"])
                     result["meta_reason"] = meta["reason"]
                     signals.append(result)
-            except Exception:
+            except Exception as e:
+                logger.warning("Strategy %s failed on %s: %s", strategy["name"], ticker, e)
                 continue
-        
+
         return signals
-    
+
     def _scan_intraday_strategies(
         self, 
         ticker: str, 
@@ -188,11 +192,12 @@ class Scanner:
                     result["confidence"] = int(base_confidence * meta["weight_modifier"])
                     result["meta_reason"] = meta["reason"]
                     signals.append(result)
-            except Exception:
+            except Exception as e:
+                logger.warning("Strategy %s failed on %s: %s", strategy["name"], ticker, e)
                 continue
-        
+
         return signals
-    
+
     def _rank_and_aggregate(self, signals: List[Dict]) -> List[Recommendation]:
         ticker_signals = defaultdict(list)
         for signal in signals:
@@ -208,7 +213,7 @@ class Scanner:
             
             for sig in ticker_signal_list:
                 weight = STRATEGY_WEIGHTS.get(sig.get("priority", "MEDIUM"), 1.0)
-                capped_confidence = min(sig["confidence"], 70)
+                capped_confidence = min(sig["confidence"], 85)
                 base_score += capped_confidence * weight
                 
                 triggered_strategies.append(TriggeredStrategy(

@@ -54,9 +54,9 @@ def ADX(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> 
     return pd.DataFrame({"ADX": adx, "+DI": plus_di, "-DI": minus_di})
 
 
-def VWAP(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> pd.Series:
+def VWAP(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 20) -> pd.Series:
     typical_price = (high + low + close) / 3
-    return (typical_price * volume).cumsum() / volume.cumsum()
+    return (typical_price * volume).rolling(period).sum() / volume.rolling(period).sum()
 
 
 def VolumeSMA(volume: pd.Series, period: int = 20) -> pd.Series:
@@ -122,7 +122,7 @@ def LowerWickRatio(open_: pd.Series, high: pd.Series, low: pd.Series, close: pd.
 
 
 def MedianPrice(high: pd.Series, low: pd.Series) -> pd.Series:
-    return np.sqrt(high * low)
+    return (high + low) / 2
 
 
 def CalculateRSRating(

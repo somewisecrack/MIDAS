@@ -65,7 +65,7 @@ class BackgroundAgent:
                 time.sleep(300)
     
     def _should_run_after_close(self, now: datetime) -> bool:
-        if now.hour == 16 and now.minute == 0:
+        if now.hour == 16 and now.minute < 5:
             if self.last_scan_time:
                 time_since = (now - self.last_scan_time).total_seconds()
                 if time_since < 1800:
@@ -78,8 +78,8 @@ class BackgroundAgent:
         
         if update_data:
             print("Updating data from Yahoo Finance...")
-            _, tickers = load_all_tickers()
-            update_data_from_yfinance(tickers)
+            _, sp500_tickers, other_tickers = load_all_tickers()
+            update_data_from_yfinance(sp500_tickers + other_tickers)
         
         self.scanner = Scanner()
         result = self.scanner.scan()

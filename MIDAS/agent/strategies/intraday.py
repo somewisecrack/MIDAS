@@ -247,7 +247,7 @@ def vpa_no_demand(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         return None
     
     typical = (df["High"] + df["Low"] + df["Close"]) / 3
-    df["VWAP"] = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
+    df["VWAP"] = (typical * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum()
     df["Volume_SMA20"] = VolumeSMA(df["Volume"], 20)
     df["Volume_Ratio"] = VolumeRatio(df["Volume"], 20)
     df["Spread"] = df["High"] - df["Low"]
@@ -286,7 +286,7 @@ def vpa_hanging_man(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         return None
     
     typical = (df["High"] + df["Low"] + df["Close"]) / 3
-    df["VWAP"] = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
+    df["VWAP"] = (typical * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum()
     df["Volume_SMA20"] = VolumeSMA(df["Volume"], 20)
     df["Volume_Ratio"] = VolumeRatio(df["Volume"], 20)
     df["Lower_Wick"] = LowerWickRatio(df["Open"], df["High"], df["Low"], df["Close"])
@@ -474,7 +474,7 @@ def alpha_041(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         return None
     
     typical = (df["High"] + df["Low"] + df["Close"]) / 3
-    df["VWAP"] = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
+    df["VWAP"] = (typical * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum()
     df["Median_Price"] = MedianPrice(df["High"], df["Low"])
     df["Alpha041"] = df["Median_Price"] - df["VWAP"]
     df["Alpha041_Pct"] = df["Alpha041"].pct_change()
@@ -512,7 +512,7 @@ def orderflow_volume_profile(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         return None
     
     typical = (df["High"] + df["Low"] + df["Close"]) / 3
-    df["VWAP"] = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
+    df["VWAP"] = (typical * df["Volume"]).rolling(20).sum() / df["Volume"].rolling(20).sum()
     df["Volume_SMA20"] = VolumeSMA(df["Volume"], 20)
     df["Volume_Ratio"] = VolumeRatio(df["Volume"], 20)
     df["ATR_14"] = ATR(df["High"], df["Low"], df["Close"], 14)
