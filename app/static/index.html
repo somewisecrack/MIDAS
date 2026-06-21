@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIDAS — Swing Strategy Test Bench</title>
+  <meta name="description" content="Backtesting and AI-powered pattern discovery for swing trading strategies. Powered by Gemma.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23f0b429'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-size='20' font-family='serif' font-weight='700' fill='%23000'>M</text></svg>">
+  <link rel="stylesheet" href="/static/css/main.css?v=4">
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════════════════ TOP BAR ═══════════════════ -->
+  <header id="topbar">
+    <a href="/" class="topbar-logo" id="home-link">
+      <div class="logo-icon">M</div>
+      <div>
+        <div class="logo-name">MIDAS</div>
+        <div class="logo-sub">Swing Strategy Test Bench</div>
+      </div>
+    </a>
+
+    <div class="topbar-divider"></div>
+
+    <!-- Ticker search -->
+    <div id="ticker-search-wrap">
+      <input
+        type="text"
+        id="ticker-input"
+        placeholder="Ticker (e.g. AAPL)"
+        autocomplete="off"
+        spellcheck="false"
+        maxlength="10"
+      >
+      <button id="batch-mode-btn" title="Batch Mode" style="margin-left:4px">
+        📄 Batch
+      </button>
+      <button id="csv-upload-btn" title="Upload CSV">
+        📁 CSV
+      </button>
+      <input type="file" id="csv-file-input" accept=".csv" style="display:none">
+    </div>
+
+    <div class="topbar-divider"></div>
+
+    <!-- Date range -->
+    <div id="date-range-wrap">
+      <button class="preset-btn" data-preset="1Y">1Y</button>
+      <button class="preset-btn active" data-preset="3Y">3Y</button>
+      <button class="preset-btn" data-preset="5Y">5Y</button>
+      <button class="preset-btn" data-preset="10Y">10Y</button>
+      <button class="preset-btn" data-preset="MAX">MAX</button>
+      <span class="date-sep">|</span>
+      <input type="date" class="date-input" id="date-from" title="Start date">
+      <span class="date-sep">→</span>
+      <input type="date" class="date-to" id="date-to" title="End date">
+    </div>
+
+    <button id="load-btn">Load Data</button>
+    <button id="reset-btn" style="margin-left:8px;background:var(--surface-3);color:var(--text);border:1px solid var(--border)">Reset</button>
+
+    <!-- Right controls -->
+    <div class="topbar-right">
+      <div class="status-badge" id="ollama-status" title="Ollama AI status">
+        <div class="status-dot" id="ollama-dot"></div>
+        <span id="ollama-label">Gemma</span>
+      </div>
+      <select id="model-select" title="Active model">
+        <option value="">Loading models…</option>
+      </select>
+      <div class="topbar-divider"></div>
+      <div class="status-badge" id="cache-status">
+        <span id="cache-label" class="text-muted">—</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ LEFT SIDEBAR — Strategy Library ═══════════════════ -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">Strategy Library</div>
+    </div>
+
+    <div class="sidebar-search">
+      <input type="text" id="strategy-search" placeholder="Search strategies…">
+    </div>
+
+    <div class="filter-row">
+      <button class="filter-chip active" data-filter="ALL">All</button>
+      <button class="filter-chip elite" data-filter="ELITE">Elite</button>
+      <button class="filter-chip" data-filter="HIGH">High</button>
+      <button class="filter-chip" data-filter="MEDIUM">Mid</button>
+      <button class="filter-chip" data-filter="LONG">Long</button>
+      <button class="filter-chip" data-filter="SHORT">Short</button>
+    </div>
+
+    <div id="strategy-list">
+      <div class="empty-state">
+        <div class="empty-icon">⚙️</div>
+        <div class="empty-text">Loading strategies…</div>
+      </div>
+    </div>
+
+      <!-- Sidebar footer -->
+      <div id="sidebar-footer">
+        <button id="run-backtest-btn" disabled>
+          <span>▶</span> Run Backtest
+        </button>
+      </div>
+  </aside>
+
+  <!-- ═══════════════════ MAIN CHART CANVAS ═══════════════════ -->
+  <main id="main">
+    <div id="chart-toolbar">
+      <span class="chart-ticker-label" id="chart-ticker">—</span>
+      <span class="chart-price-label" id="chart-price"></span>
+      <span class="chart-change-label" id="chart-change"></span>
+
+      <div class="topbar-divider"></div>
+
+      <!-- Navigation Controls -->
+      <button class="chart-nav-btn" id="nav-zoom-in" title="Zoom In">➕</button>
+      <button class="chart-nav-btn" id="nav-zoom-out" title="Zoom Out">➖</button>
+      <button class="chart-nav-btn" id="nav-pan-left" title="Pan Left">◀</button>
+      <button class="chart-nav-btn" id="nav-pan-right" title="Pan Right">▶</button>
+      <button class="chart-nav-btn" id="nav-reset" title="Reset View">↺</button>
+
+      <div class="topbar-divider"></div>
+
+      <button class="chart-indicator-toggle" id="toggle-sma10" data-ind="sma10">
+        SMA 10
+      </button>
+      <button class="chart-indicator-toggle active" id="toggle-sma20" data-ind="sma20">
+        SMA 20
+      </button>
+      <button class="chart-indicator-toggle" id="toggle-sma50" data-ind="sma50">
+        SMA 50
+      </button>
+      <button class="chart-indicator-toggle active" id="toggle-volume" data-ind="volume">
+        Vol
+      </button>
+
+      <span class="chart-data-info" id="chart-data-info"></span>
+    </div>
+
+    <div id="chart-wrap">
+      <div id="chart-container"></div>
+
+      <!-- Placeholder shown when no ticker loaded -->
+      <div id="chart-placeholder">
+        <div class="placeholder-icon">📊</div>
+        <div class="placeholder-title">Load a Ticker to Begin</div>
+        <div class="placeholder-sub">
+          Search for a ticker above, choose a date range,<br>
+          then click <strong>Load Data</strong>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════ RIGHT PANEL ═══════════════════ -->
+  <aside id="right-panel">
+    <div id="panel-tabs">
+      <button class="panel-tab active" data-panel="backtest">
+        <span class="tab-icon">📈</span> Backtest
+      </button>
+      <button class="panel-tab" data-panel="gemma">
+        <span class="tab-icon">🔮</span> Pattern
+      </button>
+      <button class="panel-tab" data-panel="chat">
+        <span class="tab-icon">💬</span> Chat
+      </button>
+      <button class="panel-tab" data-panel="history">
+        <span class="tab-icon">🕐</span> History
+      </button>
+    </div>
+
+    <div id="panel-content">
+
+      <!-- ── BACKTEST TAB ── -->
+      <div id="backtest-panel">
+        <div class="empty-state" id="backtest-empty">
+          <div class="empty-icon">📈</div>
+          <div class="empty-text">Select strategies and load data,<br>then click Run Backtest</div>
+        </div>
+
+        <!-- Running state -->
+        <div id="backtest-running" class="hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:20px 0;color:var(--gold)">
+            <div class="gemma-spinner" style="border-color:var(--gold-dim);border-top-color:var(--gold)"></div>
+            <span id="backtest-running-msg">Running backtest…</span>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div id="backtest-results" class="hidden">
+          <div class="panel-section-title">Performance</div>
+          <div id="backtest-stats"></div>
+
+          <div class="divider"></div>
+
+          <!-- Batch Ticker List (Hidden in single mode) -->
+          <div id="batch-ticker-section" class="hidden">
+            <div class="panel-section-title">Tickers with Trades</div>
+            <div id="batch-ticker-list" style="max-height:150px;overflow-y:auto;margin-bottom:10px;padding:5px;border:1px solid var(--border);border-radius:4px">
+              <!-- Rendered via JS -->
+            </div>
+            <div class="divider"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div class="panel-section-title" style="margin-bottom:0">Trades
+              <span id="trade-count-badge" style="color:var(--gold);font-family:var(--font-mono);margin-left:4px"></span>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="run-action-btn" id="export-csv-btn" title="Export trades to CSV">Export CSV</button>
+            </div>
+          </div>
+
+          <div id="trade-table-wrap">
+            <table id="trade-table">
+              <thead>
+                <tr>
+                  <th data-sort="entry_date">Entry</th>
+                  <th data-sort="exit_date">Exit</th>
+                  <th data-sort="strategy">Strategy</th>
+                  <th data-sort="direction">Dir</th>
+                  <th data-sort="return_pct">Ret%</th>
+                  <th data-sort="holding_days">Days</th>
+                  <th data-sort="mfe">MFE</th>
+                </tr>
+              </thead>
+              <tbody id="trade-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="divider"></div>
+
+          <button id="interpret-btn">
+            <span>🔮</span>
+            Ask Gemma to interpret results
+          </button>
+
+          <div id="interpretation-box"></div>
+        </div>
+      </div>
+
+      <!-- ── GEMMA / PATTERN SEARCH TAB ── -->
+      <div id="gemma-panel" class="hidden">
+        <div id="gemma-offline-msg">
+          ⚠️ Gemma is offline.<br>
+          Run <code style="color:var(--short)">ollama serve</code> then<br>
+          <code style="color:var(--short)">ollama pull gemma3:12b</code>
+        </div>
+
+        <div class="gemma-mode-tabs">
+          <button class="gemma-mode-btn active" id="mode-text-btn">✏️ Describe Pattern</button>
+          <button class="gemma-mode-btn" id="mode-image-btn">🖼 Upload Image</button>
+        </div>
+
+        <!-- Text mode -->
+        <div id="gemma-text-mode">
+          <textarea
+            id="gemma-text-input"
+            placeholder="e.g. tight consolidation for 3 weeks after a 30% run, then breakout on volume above average…"
+          ></textarea>
+        </div>
+
+        <!-- Image mode -->
+        <div id="gemma-image-mode" class="hidden">
+          <div id="gemma-dropzone">
+            <div class="drop-icon">📷</div>
+            <div class="drop-text">Drop a chart image here or click to upload</div>
+            <div class="drop-sub">PNG, JPG — max 10 MB</div>
+          </div>
+          <div id="gemma-image-preview">
+            <img id="gemma-preview-img" src="" alt="Uploaded chart">
+            <button id="gemma-image-clear" title="Remove image">✕</button>
+          </div>
+          <input type="file" id="gemma-image-input" accept="image/*" style="display:none">
+        </div>
+
+        <button id="gemma-search-btn" disabled>
+          🔮 Search with Gemma
+        </button>
+
+        <!-- Thinking indicator -->
+        <div id="gemma-thinking">
+          <div class="gemma-spinner"></div>
+          <span>Gemma is analysing the chart…</span>
+        </div>
+
+        <!-- Results -->
+        <div id="pattern-results"></div>
+      </div>
+
+      <!-- ── CHAT TAB ── -->
+      <div id="chat-panel" class="hidden">
+
+        <!-- Offline banner -->
+        <div id="chat-offline-msg" class="hidden" style="margin:12px;padding:10px 12px;background:rgba(248,81,73,0.1);border:1px solid #c73c34;border-radius:6px;font-size:12px">
+          ⚠️ Gemma is offline.<br>
+          Run <code style="color:#f85149">ollama serve</code> to start.
+        </div>
+
+        <!-- Context pill (auto-injected ticker context) -->
+        <div id="chat-context-pill" class="hidden" style="margin:8px 12px 0;padding:5px 10px;background:rgba(240,180,41,0.1);border:1px solid rgba(240,180,41,0.3);border-radius:20px;font-size:11px;color:#f0b429;display:flex;align-items:center;gap:6px">
+          <span>📊</span>
+          <span id="chat-context-label">No ticker loaded</span>
+          <button id="chat-context-clear" title="Remove context" style="background:none;border:none;color:#7d8590;cursor:pointer;margin-left:auto;font-size:12px">✕</button>
+        </div>
+
+        <!-- Messages area -->
+        <div id="chat-messages"></div>
+
+        <!-- Image preview strip -->
+        <div id="chat-image-strip" class="hidden" style="padding:6px 12px;border-top:1px solid #21262d">
+          <div style="position:relative;display:inline-block">
+            <img id="chat-image-thumb" src="" alt="Attachment"
+              style="height:52px;border-radius:4px;border:1px solid #30363d">
+            <button id="chat-image-remove"
+              style="position:absolute;top:-6px;right:-6px;background:#161b22;border:1px solid #30363d;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;color:#7d8590">✕</button>
+          </div>
+        </div>
+
+        <!-- Input bar -->
+        <div id="chat-input-bar">
+          <button id="chat-attach-btn" title="Attach image">📎</button>
+          <input type="file" id="chat-image-input" accept="image/*" style="display:none">
+          <textarea id="chat-input" placeholder="Ask Gemma anything about trading, patterns, strategies…" rows="1"></textarea>
+          <button id="chat-send-btn" title="Send (Enter)">➤</button>
+        </div>
+
+        <!-- Quick prompts -->
+        <div id="chat-quick-prompts">
+          <button class="quick-prompt" data-prompt="Explain the Minervini SEPA setup and when it works best.">Minervini SEPA</button>
+          <button class="quick-prompt" data-prompt="What market conditions favour VSA shakeout patterns?">VSA Shakeout</button>
+          <button class="quick-prompt" data-prompt="Analyse the currently loaded ticker and describe what you see in the recent price action.">Analyse chart</button>
+          <button class="quick-prompt" data-prompt="Compare Qullamaggie Episodic Pivot vs CAN SLIM breakout setups.">EP vs CAN SLIM</button>
+        </div>
+
+      </div><!-- /chat-panel -->
+
+      <!-- ── HISTORY TAB ── -->
+      <div id="history-panel" class="hidden">
+        <div id="history-list">
+          <div class="empty-state">
+            <div class="empty-icon">🕐</div>
+            <div class="empty-text">No saved runs yet</div>
+            <div class="empty-sub">Backtest results are auto-saved here</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /panel-content -->
+  </aside>
+
+</div><!-- /app -->
+
+<!-- Batch Modal -->
+<div id="batch-modal" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--surface-2);padding:20px;border-radius:8px;width:400px;border:1px solid var(--border)">
+    <h3 style="margin-top:0">Batch Input</h3>
+    <p style="font-size:12px;color:var(--text-muted)">Enter up to 100 tickers, separated by commas or newlines. Missing data will be automatically fetched.</p>
+    <textarea id="batch-ticker-input" style="width:100%;height:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:8px;font-family:var(--font-mono);resize:vertical" placeholder="AAPL, MSFT, GOOGL..."></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:15px">
+      <button id="batch-cancel-btn" style="background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:4px;cursor:pointer">Cancel</button>
+      <button id="batch-apply-btn" style="background:var(--gold);color:black;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Lightweight Charts v4 -->
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
+<!-- App scripts (load order matters) -->
+<script src="/static/js/app.js?v=4"></script>
+<script src="/static/js/chart.js?v=4"></script>
+<script src="/static/js/data_loader.js?v=4"></script>
+<script src="/static/js/backtest.js?v=4"></script>
+<script src="/static/js/gemma.js?v=4"></script>
+<script src="/static/js/chat.js?v=4"></script>
+<script src="/static/js/history.js?v=4"></script>
+
+</body>
+</html>

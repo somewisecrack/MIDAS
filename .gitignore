@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+data/
+.env
+app.log
+.pytest_cache/
+results/
+SKILL_LIBRARY/**/*.csv
