@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .strategy-tag {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .elite { background: #ffd700; color: #000; }
+        .high { background: #4ade80; color: #000; }
+        .medium { background: #60a5fa; color: #000; }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                MIDAS
+            </h1>
+            <p class="text-gray-400">AI-Powered Strategy Scanner</p>
+        </header>
+
+        <!-- Status Bar -->
+        <div id="status-bar" class="bg-gray-800/50 rounded-xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-6">
+                <div>
+                    <span class="text-gray-400 text-sm">Data Status</span>
+                    <div id="data-status" class="flex items-center gap-2">
+                        <span class="text-gray-500">Loading...</span>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <span class="text-gray-400 text-sm">Stocks</span>
+                    <div id="stocks-count" class="font-semibold">--</div>
+                </div>
+                <div class="hidden md:block">
+                    <span class="text-gray-400 text-sm">Strategies</span>
+                    <div id="strategies-count" class="font-semibold">39</div>
+                </div>
+                <div>
+                    <span class="text-gray-400 text-sm">Regime</span>
+                    <div id="regime-display" class="font-semibold text-yellow-400">--</div>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="updateData()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium transition">
+                    Update Data
+                </button>
+                <button onclick="scan()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-6 py-2 rounded-lg font-bold transition shadow-lg">
+                    Scan for Trades
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="hidden text-center py-12">
+            <div class="inline-block w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-gray-400">Scanning strategies across all stocks...</p>
+        </div>
+
+        <!-- Recommendations -->
+        <div id="results" class="space-y-4">
+            <!-- Empty State -->
+            <div id="empty-state" class="text-center py-16">
+                <div class="text-6xl mb-4">📊</div>
+                <h2 class="text-2xl font-bold mb-2">Ready to Scan</h2>
+                <p class="text-gray-400 max-w-md mx-auto">
+                    Click "Scan for Trades" to analyze all 39 strategies across your stock universe and get ranked trade recommendations.
+                </p>
+            </div>
+
+            <!-- Results Container -->
+            <div id="recommendations-container" class="hidden space-y-4"></div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-gray-500 text-sm mt-12 py-4 border-t border-gray-800">
+            <p>MIDAS | Data refreshed via Yahoo Finance | 36 Strategies Active</p>
+        </footer>
+    </div>
+
+    <script>
+        let lastResults = null;
+
+        async function init() {
+            try {
+                const response = await fetch('/api/data/status');
+                const data = await response.json();
+                updateStatusBar(data);
+            } catch (error) {
+                console.error('Failed to load status:', error);
+            }
+        }
+
+        function updateStatusBar(data) {
+            const statusEl = document.getElementById('data-status');
+            const stocksEl = document.getElementById('stocks-count');
+            
+            const freshness = data.freshness;
+            const isStale = data.is_stale;
+            
+            statusEl.innerHTML = `
+                <span class="${isStale ? 'text-red-400' : 'text-green-400'}">${freshness}</span>
+                ${isStale ? '<span class="text-yellow-400 text-xs ml-2">Update recommended</span>' : ''}
+            `;
+            stocksEl.textContent = data.stocks || '--';
+        }
+
+        async function updateData() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+            
+            try {
+                const response = await fetch('/api/data/update', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showNotification('Data updated successfully!', 'success');
+                    init();
+                } else {
+                    showNotification(data.message, 'info');
+                }
+            } catch (error) {
+                showNotification('Failed to update data', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Update Data';
+            }
+        }
+
+        async function scan() {
+            const loading = document.getElementById('loading');
+            const emptyState = document.getElementById('empty-state');
+            const container = document.getElementById('recommendations-container');
+            
+            loading.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+            container.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/scan');
+                const data = await response.json();
+                
+                lastResults = data;
+                document.getElementById('regime-display').textContent = data.regime;
+                
+                renderRecommendations(data.recommendations);
+                
+                loading.classList.add('hidden');
+                container.classList.remove('hidden');
+            } catch (error) {
+                console.error('Scan failed:', error);
+                showNotification('Scan failed: ' + error.message, 'error');
+                loading.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+            }
+        }
+
+        function renderRecommendations(recommendations) {
+            const container = document.getElementById('recommendations-container');
+            
+            if (!recommendations || recommendations.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-16">
+                        <div class="text-6xl mb-4">🔍</div>
+                        <h2 class="text-2xl font-bold mb-2">No Signals Found</h2>
+                        <p class="text-gray-400">No strategies triggered with current market conditions.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = recommendations.map(rec => `
+                <div class="bg-gray-800/50 rounded-xl p-6 card-hover transition duration-300 border border-gray-700">
+                    <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xl font-bold">
+                                ${rec.rank}
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold">${rec.ticker}</h3>
+                                <span class="text-gray-400">${rec.stock_price}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="px-3 py-1 rounded-full text-sm font-medium ${rec.type === 'SWING' ? 'bg-blue-600' : 'bg-orange-600'}">
+                                ${rec.type}
+                            </span>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-green-400">${rec.confidence_score}%</div>
+                                <div class="text-xs text-gray-400">Confidence</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 p-4 bg-gray-900/50 rounded-lg">
+                        <div>
+                            <div class="text-xs text-gray-400 mb-1">Entry Price</div>
+                            <div class="font-bold text-lg">$${rec.entry_price.toFixed(2)}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-400 mb-1">Stop Loss</div>
+                            <div class="font-bold text-lg text-red-400">$${rec.stop_loss.toFixed(2)}</div>
+                        </div>
+                        ${rec.take_profit ? `
+                        <div>
+                            <div class="text-xs text-gray-400 mb-1">Take Profit</div>
+                            <div class="font-bold text-lg text-green-400">$${rec.take_profit.toFixed(2)}</div>
+                        </div>
+                        ` : ''}
+                        <div>
+                            <div class="text-xs text-gray-400 mb-1">Hold Period</div>
+                            <div class="font-bold text-lg">${rec.holding_period}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="text-xs text-gray-400 mb-2">Strategies Triggered</div>
+                        <div class="flex flex-wrap gap-2">
+                            ${rec.strategies_triggered.map(s => `
+                                <span class="strategy-tag ${s.priority === 'ELITE' ? 'elite' : s.priority === 'HIGH' ? 'high' : 'medium'}">
+                                    ${s.name}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-700 pt-4">
+                        <div class="text-xs text-gray-400 mb-1">Reasoning</div>
+                        <p class="text-gray-300 text-sm leading-relaxed">${rec.reasoning}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showNotification(message, type) {
+            const colors = {
+                success: 'bg-green-600',
+                error: 'bg-red-600',
+                info: 'bg-blue-600'
+            };
+            
+            const notification = document.createElement('div');
+            notification.className = `fixed bottom-4 right-4 ${colors[type]} px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
