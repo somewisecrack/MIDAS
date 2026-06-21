@@ -1,122 +1,57 @@
-# MIDAS - Market Intelligence for Daily Automated Strategies
+# MIDAS — Swing Strategy Test Bench
 
-Automated trading strategy scanner that scans S&P 500 stocks and other tickers daily, identifies technical patterns using 36 strategies, and sends email recommendations.
+MIDAS is a state-of-the-art Swing Strategy Test Bench designed to backtest, analyze, and discover trading patterns across the stock market. Powered by an interactive web UI, robust Python backend, and Gemma-based AI, MIDAS allows traders to batch backtest dozens of strategies across hundreds of tickers effortlessly.
 
-## Features
+## Key Features
 
-- Scans 800+ stocks (S&P 500 + other tickers from bundled data)
-- 36 trading strategies (22 swing + 14 intraday)
-- Daily automated scan at 4 PM ET (weekdays)
-- Email notifications with top 10 recommendations per category:
-  - Top 10 S&P 500 SWING trades
-  - Top 10 S&P 500 INTRADAY trades
-  - Top 10 Other SWING trades
-  - Top 10 Other INTRADAY trades
-- Segregated results for S&P 500 vs other stocks (small cap, penny, etc.)
+- **Batch Backtesting Engine**: Backtest up to 100 tickers simultaneously against multiple strategies in a single click. 
+- **Portfolio-Level Reporting**: Get aggregated stats (Win Rate, Profit Factor, Total Return, Max Drawdown) for your entire batch run, alongside a ticker-by-ticker breakdown.
+- **Interactive Charting**: Built with Lightweight Charts. Seamlessly navigate price action with native Zoom, Pan, and Reset controls. Automatically overlay Entry and Exit signals on the chart.
+- **AI-Powered Insights**: Integrated with Ollama/Gemma to automatically analyze backtest results, discover patterns, and answer questions via an interactive multi-modal chat window.
+- **Extensive Strategy Library**: Over 20 built-in swing and intraday strategies including Turtle Systems, VPA/VSA shakeouts, Minervini SEPA, Camarilla breakouts, and more.
+- **Auto-Fetching**: Missing ticker data? MIDAS automatically fetches and caches missing OHLCV data from Yahoo Finance on the fly.
+- **Local Persistence**: All trades, runs, and historical data are stored natively in an optimized SQLite WAL-mode database.
 
-## Setup
+## Installation & Setup
 
-### 1. Install Dependencies
+### 1. Requirements
+- Python 3.10+
+- macOS/Linux
+- [Ollama](https://ollama.com/) (installed and running locally to use the AI chat features)
+- Gemma Model (run `ollama run gemma:2b` or `gemma:7b` to pull the models locally)
 
+### 2. Environment Setup
 ```bash
+# Clone the repository
+git clone https://github.com/somewisecrack/MIDAS.git
+cd MIDAS
+
+# Create virtual environment and install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
-
-Copy `.env.example` to `.env` and fill in your values:
-
+### 3. Run the App
 ```bash
-cp agent/.env.example .env
+./run.sh
 ```
+By default, the server will start on `http://localhost:7432`.
 
-Edit `.env`:
-- `SMTP_EMAIL`: Your Gmail address
-- `SMTP_PASSWORD`: Gmail App Password (16 characters)
-- Set `NOTIFICATIONS_ENABLED=true` to enable emails
+## How to Use
 
-### 3. Get Gmail App Password
-
-1. Enable 2-Factor Authentication on your Google Account
-2. Go to https://myaccount.google.com/apppasswords
-3. Create a new App Password for "Mail"
-4. Copy the 16-character password to `.env`
-
-### 4. Run Locally
-
-```bash
-python -m agent.main --scan-only
-```
-
-## Deployment to Google Cloud
-
-### Prerequisites
-
-- Google Cloud SDK installed (`gcloud`)
-- Docker installed
-- GCP project with billing enabled
-
-### Deploy
-
-```bash
-./deploy.sh YOUR_PROJECT_ID us-central1
-```
-
-### Create Secrets
-
-Before deploying, create your secrets in Secret Manager:
-
-```bash
-# Set your SMTP email
-echo -n "your_email@gmail.com" | gcloud secrets create smtp-email --data-file=-
-
-# Set your SMTP password (App Password)
-echo -n "your_16_char_app_password" | gcloud secrets create smtp-password --data-file=-
-```
-
-### Verify Deployment
-
-```bash
-# Test the scan
-curl -X POST https://YOUR_SERVICE_URL/scan
-
-# Check health
-curl https://YOUR_SERVICE_URL/health
-```
+1. **Load Data**: Enter a ticker in the search bar and click `Load Data`, or use the **[📄 Batch]** button to paste up to 100 tickers at once.
+2. **Select Strategies**: Pick one or more strategies from the left-side panel.
+3. **Run Backtest**: Click the gold **Run Backtest** button.
+4. **Analyze**: Use the right-side panel to view detailed trade logs, or click the **Chat** tab to ask the local Gemma AI to interpret your results and suggest optimizations.
 
 ## Architecture
 
-```
-agent/
-├── main.py          # Entry point (local scan + Cloud Run server)
-├── scanner.py      # Strategy engine, ranking, S&P 500 segregation
-├── notifications.py # Email HTML formatting
-├── data_loader.py  # Data loading, S&P 500 filtering, yfinance updates
-├── models.py       # Pydantic models
-├── api.py          # FastAPI endpoints
-└── templates/      # Web UI templates (optional)
-
-data/
-└── tickers_ohlcv.csv  # Bundled ticker list (~838 tickers)
-
-strategies/         # Trading strategy implementations
-scripts/            # Utility scripts
-results/           # Scan results (gitignored)
-```
-
-## Cloud Run Details
-
-- **Service**: Runs on Google Cloud Run
-- **Schedule**: Cloud Scheduler triggers at 4 PM ET on weekdays (21:00 UTC)
-- **Resources**: 2 vCPU, 2GB RAM, 600s timeout
-- **Scaling**: Max 1 instance (full refresh takes ~10 min)
-
-## Data Refresh
-
-- Daily full refresh downloads last 365 days for all tickers
-- Uses `yfinance` for OHLCV data
-- S&P 500 list fetched from GitHub dataset for accurate filtering
+- **Frontend**: Vanilla JavaScript + HTML/CSS (Glassmorphic dark-mode UI). 
+- **Backend**: Python (FastAPI). 
+- **Database**: SQLite (`midas.db`) powered by SQLAlchemy ORM.
+- **Data Source**: `yfinance` for automated OHLCV loading.
+- **AI**: Local execution via `httpx` forwarding to `http://localhost:11434` (Ollama).
 
 ## License
-
 MIT
