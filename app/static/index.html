@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MIDAS — Swing Strategy Test Bench</title>
-  <meta name="description" content="Backtesting and AI-powered pattern discovery for swing trading strategies. Powered by Gemma.">
+  <meta name="description" content="Backtesting and AI-powered pattern discovery for swing trading strategies. Powered by Qwen.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23f0b429'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-size='20' font-family='serif' font-weight='700' fill='%23000'>M</text></svg>">
   <link rel="stylesheet" href="/static/css/main.css?v=4">
 </head>
@@ -64,7 +64,7 @@
     <div class="topbar-right">
       <div class="status-badge" id="ollama-status" title="Ollama AI status">
         <div class="status-dot" id="ollama-dot"></div>
-        <span id="ollama-label">Gemma</span>
+        <span id="ollama-label">Qwen</span>
       </div>
       <select id="model-select" title="Active model">
         <option value="">Loading models…</option>
@@ -239,7 +239,7 @@
 
           <button id="interpret-btn">
             <span>🔮</span>
-            Ask Gemma to interpret results
+            Ask Qwen to interpret results
           </button>
 
           <div id="interpretation-box"></div>
@@ -249,9 +249,9 @@
       <!-- ── GEMMA / PATTERN SEARCH TAB ── -->
       <div id="gemma-panel" class="hidden">
         <div id="gemma-offline-msg">
-          ⚠️ Gemma is offline.<br>
+          ⚠️ Qwen is offline.<br>
           Run <code style="color:var(--short)">ollama serve</code> then<br>
-          <code style="color:var(--short)">ollama pull gemma3:12b</code>
+          <code style="color:var(--short)">ollama pull qwen2.5vl:32b</code>
         </div>
 
         <div class="gemma-mode-tabs">
@@ -282,13 +282,13 @@
         </div>
 
         <button id="gemma-search-btn" disabled>
-          🔮 Search with Gemma
+          🔮 Search with Qwen
         </button>
 
         <!-- Thinking indicator -->
         <div id="gemma-thinking">
           <div class="gemma-spinner"></div>
-          <span>Gemma is analysing the chart…</span>
+          <span>Qwen is analysing the chart…</span>
         </div>
 
         <!-- Results -->
@@ -300,7 +300,7 @@
 
         <!-- Offline banner -->
         <div id="chat-offline-msg" class="hidden" style="margin:12px;padding:10px 12px;background:rgba(248,81,73,0.1);border:1px solid #c73c34;border-radius:6px;font-size:12px">
-          ⚠️ Gemma is offline.<br>
+          ⚠️ Qwen is offline.<br>
           Run <code style="color:#f85149">ollama serve</code> to start.
         </div>
 
@@ -328,7 +328,7 @@
         <div id="chat-input-bar">
           <button id="chat-attach-btn" title="Attach image">📎</button>
           <input type="file" id="chat-image-input" accept="image/*" style="display:none">
-          <textarea id="chat-input" placeholder="Ask Gemma anything about trading, patterns, strategies…" rows="1"></textarea>
+          <textarea id="chat-input" placeholder="Ask Qwen anything about trading, patterns, strategies…" rows="1"></textarea>
           <button id="chat-send-btn" title="Send (Enter)">➤</button>
         </div>
 

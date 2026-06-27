@@ -1,6 +1,8 @@
 """
 gemma.py — /api/gemma/* endpoints: pattern search (text + image), interpretation.
 Gracefully handles Ollama being offline — returns 503 with clear message.
+
+Despite the legacy module name, MIDAS now defaults to Qwen via Ollama.
 """
 import base64
 import logging
@@ -30,7 +32,7 @@ def _require_ollama():
             status_code=503,
             detail={
                 "error": "Ollama is not running.",
-                "fix": "Run: ollama serve  (then: ollama pull gemma3:12b)",
+                "fix": "Run: ollama serve  (then: ollama pull qwen2.5vl:32b)",
             },
         )
     return status
@@ -169,7 +171,7 @@ async def chat_stream(req: ChatRequest):
 
 @router.post("/pattern/text")
 async def pattern_text(req: TextPatternRequest):
-    """Find historical occurrences of a described pattern using Gemma."""
+    """Find historical occurrences of a described pattern using the local Qwen model."""
     _require_ollama()
 
     if req.preset:
@@ -215,7 +217,7 @@ async def pattern_image(
     image_date_to: Optional[str] = Form(None),
     file: UploadFile = File(...),
 ):
-    """Find patterns similar to an uploaded chart image using Gemma vision."""
+    """Find patterns similar to an uploaded chart image using the local Qwen vision model."""
     _require_ollama()
 
     if preset:
@@ -259,7 +261,7 @@ async def pattern_image(
 
 @router.post("/interpret")
 async def interpret(req: InterpretRequest):
-    """Ask Gemma for a plain-English interpretation of a backtest run."""
+    """Ask Qwen for a plain-English interpretation of a backtest run."""
     _require_ollama()
 
     run = get_backtest_run(req.run_id)

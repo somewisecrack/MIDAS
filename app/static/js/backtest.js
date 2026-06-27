@@ -366,10 +366,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     a.click();
   });
 
-  // ── Gemma interpret ───────────────────────────────────────────────────────
+  // ── Qwen interpret ────────────────────────────────────────────────────────
   interpretBtn.addEventListener('click', async () => {
     if (!MIDAS.state.ollamaOnline) {
-      MIDAS.toast('Gemma is offline — start Ollama first', 'warn');
+      MIDAS.toast('Qwen is offline — start Ollama first', 'warn');
       return;
     }
     if (!MIDAS.state.lastRunId) return;
@@ -382,10 +382,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       interpretBox.textContent = res.interpretation || 'No interpretation returned.';
       interpretBox.classList.add('visible');
     } catch (e) {
-      MIDAS.toast(`Gemma error: ${e.message}`, 'error');
+      MIDAS.toast(`Qwen error: ${e.message}`, 'error');
     } finally {
       interpretBtn.disabled = false;
-      interpretBtn.innerHTML = '<span>🔮</span> Ask Gemma to interpret results';
+      interpretBtn.innerHTML = '<span>🔮</span> Ask Qwen to interpret results';
     }
   });
 

@@ -1,5 +1,5 @@
 /**
- * gemma.js — Pattern search panel (text + image) using Gemma via Ollama.
+ * gemma.js — Pattern search panel (text + image) using Qwen via Ollama.
  * Handles: mode switching, text input, image drag-drop/upload, search,
  * results rendering, and jumping chart to matched windows.
  */
@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!MIDAS.state.ollamaOnline) {
-      MIDAS.toast('Gemma is offline — start Ollama first', 'warn');
+      MIDAS.toast('Qwen is offline — start Ollama first', 'warn');
       return;
     }
 
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    MIDAS.toast(`Gemma found ${windows.length} matching window${windows.length > 1 ? 's' : ''}`, 'success');
+    MIDAS.toast(`Qwen found ${windows.length} matching window${windows.length > 1 ? 's' : ''}`, 'success');
   }
 
   // Expose for external refresh

@@ -186,11 +186,11 @@ window.MIDAS = (() => {
       if (state.ollamaOnline) {
         dot.className = 'status-dot online';
         const models = h.ollama.models || [];
-        label.textContent = 'Gemma ✓';
+        label.textContent = 'Qwen ✓';
         label.title = `Models: ${models.join(', ')}`;
       } else {
         dot.className = 'status-dot offline';
-        label.textContent = 'Gemma offline';
+        label.textContent = 'Qwen offline';
         label.title = 'Run: ollama serve';
       }
       // Cache info

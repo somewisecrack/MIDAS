@@ -1,8 +1,8 @@
 """
 gemma_client.py — Thin wrapper around Ollama's HTTP API for MIDAS pattern search
-and result interpretation. Uses gemma3:12b by default, falls back to gemma3:4b.
+and result interpretation. Uses Qwen 2.5 VL 32B by default.
 
-All Gemma calls are streamed and collected synchronously.
+All local model calls are collected synchronously.
 Image search encodes a server-side mplfinance PNG as base64.
 """
 import base64
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 import os
 
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
-PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "gemma3:12b")
-FALLBACK_MODEL = os.environ.get("FALLBACK_MODEL", "gemma3:4b")
+PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "qwen2.5vl:32b")
+FALLBACK_MODEL = os.environ.get("FALLBACK_MODEL", "qwen2.5vl:7b")
 TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", 120))
 
 
@@ -132,7 +132,7 @@ If no pattern is found, return: []
 
 def find_pattern_text(ticker: str, data_rows: List[Dict], query: str) -> List[Dict]:
     """
-    Ask Gemma to find occurrences of a described pattern in the OHLCV data.
+    Ask the local model to find occurrences of a described pattern in the OHLCV data.
     Returns list of { start, end, confidence, explanation } dicts.
     """
     # Build a compact data summary (at most 500 rows)
@@ -191,7 +191,7 @@ def find_pattern_image(
     image_date_to: str,
 ) -> List[Dict]:
     """
-    Ask Gemma (vision) to match a chart image against historical OHLCV data.
+    Ask the local vision model to match a chart image against historical OHLCV data.
     image_b64: base64-encoded PNG of the chart window.
     Returns list of { start, end, confidence, explanation } dicts.
     """
@@ -253,7 +253,7 @@ def interpret_backtest(
     trades: List[Dict],
 ) -> str:
     """
-    Ask Gemma to provide a plain-English interpretation of backtest results.
+    Ask the local model to provide a plain-English interpretation of backtest results.
     Returns the interpretation as a string.
     """
     top_trades = sorted(trades, key=lambda t: t.get("return_pct", 0), reverse=True)[:5]

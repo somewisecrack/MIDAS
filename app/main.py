@@ -55,8 +55,8 @@ def create_app() -> FastAPI:
             logger.info("Ollama: online | models: %s", models)
         else:
             logger.warning(
-                "Ollama: OFFLINE — Gemma features will be unavailable. "
-                "Install Ollama and run: ollama pull gemma3:12b"
+                "Ollama: OFFLINE — Qwen features will be unavailable. "
+                "Install Ollama and run: ollama pull qwen2.5vl:32b"
             )
 
     # ── Health ─────────────────────────────────────────────────────────────────
