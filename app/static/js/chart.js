@@ -224,7 +224,7 @@ window.MIDASChart = (() => {
         position: 'aboveBar',
         color: t.return_pct >= 0 ? '#26a641' : '#f85149',
         shape: 'arrowDown',
-        text: `${t.return_pct >= 0 ? '+' : ''}${t.return_pct?.toFixed(1)}%`,
+        text: `${t.return_pct >= 0 ? '+' : ''}${t.return_pct?.toFixed(2)}%`,
         size: 1,
       });
     }

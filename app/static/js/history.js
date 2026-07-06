@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const retVal = s.total_return;
       const retStr = retVal !== undefined
-        ? `${retVal >= 0 ? '+' : ''}${retVal}%`
+        ? `${retVal >= 0 ? '+' : ''}${retVal.toFixed(2)}%`
         : '—';
       const retClass = retVal !== undefined ? (retVal >= 0 ? 'pos' : 'neg') : '';
 
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="font-size:10px;color:var(--text-faint);font-family:var(--font-mono)">${r.date_from} → ${r.date_to}</div>
           <div class="run-stats-row">
             <div class="run-stat">Trades <span>${s.total_trades ?? '—'}</span></div>
-            <div class="run-stat">Win <span>${s.win_rate ?? '—'}%</span></div>
+            <div class="run-stat">Win <span>${s.win_rate !== undefined ? s.win_rate.toFixed(2) : '—'}%</span></div>
             <div class="run-stat">Return <span class="${retClass}">${retStr}</span></div>
             <div class="run-stat">PF <span>${s.profit_factor ?? '—'}</span></div>
           </div>
@@ -125,6 +125,13 @@ document.addEventListener('DOMContentLoaded', () => {
       MIDAS.state.lastRunId = runId;
       MIDAS.state.lastBacktestResult = run;
 
+      MIDAS.state.dateFrom = run.date_from;
+      MIDAS.state.dateTo = run.date_to;
+      MIDAS.state.preset = null;
+      document.getElementById('date-from').value = run.date_from;
+      document.getElementById('date-to').value = run.date_to;
+      document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+
       // If ticker data not loaded for this run, auto-fetch
       const needFetch = MIDAS.state.ticker !== run.ticker ||
         !MIDAS.state.ohlcvData.length;
@@ -137,13 +144,13 @@ document.addEventListener('DOMContentLoaded', () => {
           date_to:   run.date_to,
         });
         const dataRes = await MIDAS.api('GET', `/data/${run.ticker}?date_from=${run.date_from}&date_to=${run.date_to}`);
-        MIDAS.state.ticker    = run.ticker;
-        MIDAS.state.dateFrom  = run.date_from;
-        MIDAS.state.dateTo    = run.date_to;
+        MIDAS.setSingleTickerScope?.(run.ticker, { clearData: false });
         MIDAS.state.ohlcvData = dataRes.data || [];
         document.getElementById('ticker-input').value = run.ticker;
         MIDASChart.loadCandles(MIDAS.state.ohlcvData);
       }
+
+      MIDAS.setSingleTickerScope?.(run.ticker, { clearData: false });
 
       // Show backtest results
       MIDAS.switchPanel('backtest');

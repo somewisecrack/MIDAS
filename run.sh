@@ -34,8 +34,8 @@ echo "  ────────────────────────
 echo "  → App:      http://localhost:${PORT}"
 echo "  → API docs: http://localhost:${PORT}/docs"
 echo ""
-echo "  Qwen: make sure Ollama is running"
-echo "  Install: ollama pull qwen2.5vl:32b"
+echo "  Gemma: make sure Ollama is running"
+echo "  Install: ollama pull gemma3:12b"
 echo "  ──────────────────────────────────────"
 echo ""
 

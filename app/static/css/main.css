@@ -78,7 +78,7 @@ body {
 #app {
   display: grid;
   grid-template-rows: var(--topbar-h) 1fr;
-  grid-template-columns: var(--sidebar-w) 1fr var(--panel-w);
+  grid-template-columns: minmax(0, var(--sidebar-w)) minmax(0, 1fr) minmax(0, var(--panel-w));
   height: 100vh;
   overflow: hidden;
 }
@@ -136,7 +136,12 @@ body {
   align-items: center;
   gap: 8px;
   flex: 1;
-  max-width: 400px;
+  max-width: 600px;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
 }
 #ticker-input {
   background: var(--surface-3);
@@ -245,6 +250,10 @@ body {
 
 /* ── Sidebar ───────────────────────────────────────────────────────────────── */
 #sidebar {
+  grid-column: 1;
+  grid-row: 2;
+  width: var(--sidebar-w);
+  min-width: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -418,12 +427,78 @@ body {
   padding: 1px 6px;
 }
 
+/* Run Mode Toggle */
+.run-mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.toggle-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  transition: color 0.2s;
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--surface-3);
+  border: 1px solid var(--border);
+  transition: .2s;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text-muted);
+  transition: .2s;
+}
+input:checked + .slider {
+  background-color: rgba(96,165,250,0.2);
+  border-color: var(--info);
+}
+input:checked + .slider:before {
+  transform: translateX(16px);
+  background-color: var(--info);
+}
+.slider.round {
+  border-radius: 20px;
+}
+.slider.round:before {
+  border-radius: 50%;
+}
+input:checked ~ .toggle-label {
+  color: var(--info);
+}
+
 /* ── Main Canvas ───────────────────────────────────────────────────────────── */
 #main {
+  grid-column: 2;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--bg);
+  position: relative;
+  min-width: 0;
 }
 
 /* Chart toolbar */
@@ -531,8 +606,73 @@ body {
   animation: shimmer 1.5s infinite;
 }
 
+/* Scan Table */
+#scan-table-wrap {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+#scan-table-wrap.hidden {
+  display: none;
+}
+.scan-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  background: var(--surface);
+}
+#scan-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+#scan-count-badge {
+  background: var(--surface-3);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--gold);
+  font-family: var(--font-mono);
+}
+#scan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+#scan-table th {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 8px 16px;
+  text-align: left;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+#scan-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-2);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+#scan-table tr:hover td {
+  background: var(--surface-3);
+}
+
+
 /* ── Right Panel ───────────────────────────────────────────────────────────── */
 #right-panel {
+  grid-column: 3;
+  grid-row: 2;
+  width: var(--panel-w);
+  min-width: 0;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;
@@ -572,6 +712,64 @@ body {
 #panel-content {
   flex: 1;
   overflow-y: auto;
+}
+
+#active-scope-section {
+  padding: 12px 12px 0;
+}
+#active-scope-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.active-scope-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 8px 10px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.active-scope-body {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.active-scope-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.active-scope-meta {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.active-scope-close {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+.active-scope-close:hover {
+  color: var(--short);
+  border-color: var(--short);
+  background: var(--short-bg);
 }
 
 /* ── Backtest Panel ────────────────────────────────────────────────────────── */

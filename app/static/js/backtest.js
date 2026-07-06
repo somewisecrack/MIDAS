@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const interpretBtn    = document.getElementById('interpret-btn');
   const interpretBox    = document.getElementById('interpretation-box');
   const exportCsvBtn    = document.getElementById('export-csv-btn');
+  const tradeTableWrap  = document.getElementById('trade-table-wrap');
+  const batchSection    = document.getElementById('batch-ticker-section');
+  const tradeHeaderRow  = tradeCountBadge.parentElement.parentElement;
 
   let allStrategies = [];
   let activeFilter  = 'ALL';
@@ -88,8 +91,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function updateSelectionCount() {
-    const n = MIDAS.state.selectedStrategies.size;
-    runBtn.disabled = !(n > 0 && MIDAS.state.ohlcvData.length > 0);
+    // We keep the run button enabled so click handlers can display helpful toasts.
+    runBtn.disabled = false;
   }
 
   // ── Filters ───────────────────────────────────────────────────────────────
@@ -104,35 +107,208 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   strategySearch.addEventListener('input', () => renderStrategyList());
 
-  strategySearch.addEventListener('input', () => renderStrategyList());
-
-  // ── Run Backtest ──────────────────────────────────────────────────────────
+  // ── Run Button Logic ────────────────────────────────────────────────────────
   runBtn.addEventListener('click', async () => {
     if (MIDAS.state.selectedStrategies.size === 0) {
       MIDAS.toast('Select at least one strategy', 'warn');
       return;
     }
-    if (!MIDAS.state.batchTickers.length && !MIDAS.state.ohlcvData.length) {
-      MIDAS.toast('Load ticker data first, or enable Batch Mode', 'warn');
+
+    const isScanMode = document.getElementById('run-mode-switch').checked;
+
+    if (isScanMode) {
+      if (!MIDAS.state.sp500Mode && MIDAS.state.batchTickers.length === 0) {
+        MIDAS.toast('Scan mode requires S&P 500 or Batch mode active', 'warn');
+        return;
+      }
+      runScan();
+    } else {
+      if (!MIDAS.state.batchTickers.length && !MIDAS.state.ohlcvData.length && !MIDAS.state.sp500Mode) {
+        MIDAS.toast('Load ticker data first, or enable Batch/SP500 Mode', 'warn');
+        return;
+      }
+      runBacktest();
+    }
+  });
+
+  async function runScan() {
+    const strategyIds = [...MIDAS.state.selectedStrategies];
+    backtestEmpty.classList.add('hidden');
+    backtestResults.classList.add('hidden');
+    backtestRunning.classList.remove('hidden');
+    if (window.MIDASChart) {
+      MIDASChart.clearMarkers();
+      MIDASChart.clearHighlights();
+    }
+    interpretBox.classList.remove('visible');
+
+    document.getElementById('backtest-running-msg').textContent =
+      `Scanning ${MIDAS.getScopeInfo().runLabel || 'selected universe'}... (This may take 1-2 minutes)`;
+
+    MIDAS.switchPanel('backtest');
+
+    try {
+      const payload = {
+        strategy_ids: strategyIds,
+        date_from:    MIDAS.state.dateFrom,
+        date_to:      MIDAS.state.dateTo,
+      };
+      if (MIDAS.state.sp500Mode) {
+        payload.sp500 = true;
+      } else {
+        payload.tickers = MIDAS.state.batchTickers;
+      }
+
+      const res = await MIDAS.api('POST', '/backtest/scan', payload);
+
+      MIDAS.state.lastScanResult = res;
+      MIDAS.state.lastRunId = null;
+
+      backtestRunning.classList.add('hidden');
+      MIDAS.showScanView?.();
+
+      const tbody = document.getElementById('scan-tbody');
+      if (!res.results || res.results.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center">No active setups found for next session.</td></tr>`;
+        document.getElementById('scan-count-badge').textContent = '0 setups';
+      } else {
+        document.getElementById('scan-count-badge').textContent = `${res.results.length} setup${res.results.length>1?'s':''}`;
+        tbody.innerHTML = res.results.map(r => `
+          <tr>
+            <td style="color:var(--gold); font-weight:600">${r.ticker}</td>
+            <td>${r.strategy}</td>
+            <td class="${r.direction === 'LONG' ? 'direction-long' : 'direction-short'}">${r.direction}</td>
+            <td>${r.close_price.toFixed(2)}</td>
+            <td>${r.entry_price.toFixed(2)}</td>
+            <td>${r.stop_loss.toFixed(2)}</td>
+          </tr>
+        `).join('');
+      }
+
+      renderScanSummary(res);
+      MIDAS.toast(`Scan complete — ${res.results?.length || 0} setup${(res.results?.length || 0) === 1 ? '' : 's'} found`, 'success');
+
+    } catch (e) {
+      backtestRunning.classList.add('hidden');
+      MIDAS.toast(`Scan Error: ${e.message}`, 'error');
+    }
+  }
+
+  async function requestGemmaInterpretation(mode, triggerBtn, outputBox) {
+    if (!MIDAS.state.ollamaOnline) {
+      MIDAS.toast('Gemma is offline — start Ollama first', 'warn');
       return;
     }
 
+    if (mode === 'backtest' && !MIDAS.state.lastRunId) return;
+    if (mode === 'scan' && !MIDAS.state.lastScanResult) return;
+
+    triggerBtn.disabled = true;
+    triggerBtn.innerHTML = '<div class="gemma-spinner" style="width:14px;height:14px;border-width:2px;border-color:var(--gemma-dim);border-top-color:var(--gemma)"></div> Analysing…';
+
+    try {
+      let res;
+      if (mode === 'scan') {
+        const scan = MIDAS.state.lastScanResult;
+        res = await MIDAS.api('POST', '/gemma/interpret-scan', {
+          scope: interpretBtn.dataset.scope || 'Scan',
+          date_from: scan.date_from,
+          date_to: scan.date_to,
+          results: scan.results || [],
+        });
+      } else {
+        res = await MIDAS.api('POST', '/gemma/interpret', { run_id: MIDAS.state.lastRunId });
+      }
+      outputBox.textContent = res.interpretation || 'No interpretation returned.';
+      outputBox.classList.add('visible');
+    } catch (e) {
+      MIDAS.toast(`Gemma error: ${e.message}`, 'error');
+    } finally {
+      triggerBtn.disabled = false;
+      triggerBtn.innerHTML = mode === 'scan'
+        ? '<span>🔮</span> Interpret Scan with Gemma'
+        : '<span>🔮</span> Ask Gemma to interpret results';
+    }
+  }
+
+  function renderScanSummary(res) {
+    const results = res.results || [];
+    const longCount = results.filter(r => r.direction === 'LONG').length;
+    const shortCount = results.filter(r => r.direction === 'SHORT').length;
+    const strategyCount = new Set(results.map(r => r.strategy)).size;
+    const tickerCount = new Set(results.map(r => r.ticker)).size;
+    const scope = MIDAS.state.sp500Mode
+      ? 'S&P 500 scan'
+      : `Batch scan (${MIDAS.state.batchTickers.length} tickers)`;
+
+    backtestStats.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Scope</div>
+        <div class="stat-value gold" style="font-size:14px">${MIDAS.state.sp500Mode ? 'S&P 500' : 'Batch'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Setups</div>
+        <div class="stat-value gold">${results.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tickers</div>
+        <div class="stat-value">${tickerCount}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Strategies</div>
+        <div class="stat-value">${strategyCount}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Long</div>
+        <div class="stat-value positive">${longCount}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Short</div>
+        <div class="stat-value ${shortCount > 0 ? 'negative' : ''}">${shortCount}</div>
+      </div>
+    `;
+
+    batchSection.classList.add('hidden');
+    tradeHeaderRow.classList.add('hidden');
+    tradeTableWrap.classList.add('hidden');
+    interpretBtn.disabled = false;
+    interpretBtn.dataset.mode = 'scan';
+    interpretBtn.dataset.scope = scope;
+    interpretBtn.innerHTML = '<span>🔮</span> Interpret scan with Gemma';
+    backtestResults.classList.remove('hidden');
+    MIDAS.switchPanel('backtest');
+  }
+
+  function resetBacktestPanelForBacktest() {
+    tradeHeaderRow.classList.remove('hidden');
+    tradeTableWrap.classList.remove('hidden');
+    interpretBtn.dataset.mode = 'backtest';
+    delete interpretBtn.dataset.scope;
+    interpretBtn.innerHTML = '<span>🔮</span> Ask Gemma to interpret results';
+  }
+
+  async function runBacktest() {
     // Show running state
     backtestEmpty.classList.add('hidden');
     backtestResults.classList.add('hidden');
     backtestRunning.classList.remove('hidden');
-    MIDASChart.clearMarkers();
-    MIDASChart.clearHighlights();
+    if (window.MIDASChart) {
+      MIDASChart.clearMarkers();
+      MIDASChart.clearHighlights();
+    }
     interpretBox.classList.remove('visible');
 
     const strategyIds = [...MIDAS.state.selectedStrategies];
     
-    if (MIDAS.state.batchTickers.length > 0) {
+    if (MIDAS.state.sp500Mode) {
+      document.getElementById('backtest-running-msg').textContent =
+        `Running S&P 500 backtest... (This may take 15-30 seconds to fetch data)`;
+    } else if (MIDAS.state.batchTickers.length > 0) {
       document.getElementById('backtest-running-msg').textContent =
         `Running batch backtest on ${MIDAS.state.batchTickers.length} tickers... (This may take a moment to fetch data)`;
     } else {
       document.getElementById('backtest-running-msg').textContent =
-        `Running ${strategyIds.length} strateg${strategyIds.length > 1 ? 'ies' : 'y'} on ${MIDAS.state.ticker}…`;
+        `Running ${strategyIds.length} strateg${strategyIds.length > 1 ? 'ies' : 'y'} on ${MIDAS.getScopeInfo().runLabel || MIDAS.state.ticker}…`;
     }
 
     MIDAS.switchPanel('backtest');
@@ -143,7 +319,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         date_from:    MIDAS.state.dateFrom,
         date_to:      MIDAS.state.dateTo,
       };
-      if (MIDAS.state.batchTickers.length > 0) {
+      if (MIDAS.state.sp500Mode) {
+        payload.sp500 = true;
+      } else if (MIDAS.state.batchTickers.length > 0) {
         payload.tickers = MIDAS.state.batchTickers;
       } else {
         payload.ticker = MIDAS.state.ticker;
@@ -152,9 +330,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await MIDAS.api('POST', '/backtest/run', payload);
 
       MIDAS.state.lastBacktestResult = res;
+      MIDAS.state.lastScanResult = null;
       MIDAS.state.lastRunId = res.run_id;
 
       backtestRunning.classList.add('hidden');
+      MIDAS.showChartView?.();
 
       if (!res.trades || res.trades.length === 0) {
         backtestEmpty.classList.remove('hidden');
@@ -172,7 +352,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Auto-save notice
       MIDAS.toast(
-        `Backtest complete — ${res.trades.length} trades | Win rate: ${res.stats.win_rate}%`,
+        `Backtest complete — ${res.trades.length} trades | Win rate: ${(res.stats.win_rate || 0).toFixed(2)}%`,
         'success',
       );
 
@@ -184,11 +364,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       backtestEmpty.classList.remove('hidden');
       MIDAS.toast(`Backtest failed: ${err.message}`, 'error');
     }
-  });
+  }
 
   // ── Render results ────────────────────────────────────────────────────────
   function renderResults(res) {
     const s = res.stats;
+
+    resetBacktestPanelForBacktest();
 
     // Stats cards
     const pfColor = s.profit_factor >= 1.5 ? 'gold' : s.profit_factor >= 1 ? '' : 'negative';
@@ -202,34 +384,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
       <div class="stat-card">
         <div class="stat-label">Win Rate</div>
-        <div class="stat-value ${wrColor}">${s.win_rate}%</div>
+        <div class="stat-value ${wrColor}">${(s.win_rate || 0).toFixed(2)}%</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Profit Factor</div>
-        <div class="stat-value ${pfColor}">${s.profit_factor === 999 ? '∞' : s.profit_factor}</div>
+        <div class="stat-value ${pfColor}">${s.profit_factor === 999 ? '∞' : (s.profit_factor || 0).toFixed(2)}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total Return</div>
-        <div class="stat-value ${retColor}">${s.total_return >= 0 ? '+' : ''}${s.total_return}%</div>
+        <div class="stat-value ${retColor}">${s.total_return >= 0 ? '+' : ''}${(s.total_return || 0).toFixed(2)}%</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Avg Return</div>
-        <div class="stat-value ${s.avg_return >= 0 ? 'positive' : 'negative'}">${s.avg_return >= 0 ? '+' : ''}${s.avg_return}%</div>
+        <div class="stat-value ${s.avg_return >= 0 ? 'positive' : 'negative'}">${s.avg_return >= 0 ? '+' : ''}${(s.avg_return || 0).toFixed(2)}%</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Max Drawdown</div>
-        <div class="stat-value negative">${s.max_drawdown}%</div>
+        <div class="stat-value negative">${(s.max_drawdown || 0).toFixed(2)}%</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Sharpe</div>
-        <div class="stat-value">${s.sharpe}</div>
+        <div class="stat-value">${(s.sharpe || 0).toFixed(2)}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Avg Win / Loss</div>
         <div class="stat-value" style="font-size:12px">
-          <span class="return-positive">+${s.avg_win}%</span>
+          <span class="return-positive">+${(s.avg_win || 0).toFixed(2)}%</span>
           <span class="text-muted"> / </span>
-          <span class="return-negative">${s.avg_loss}%</span>
+          <span class="return-negative">${(s.avg_loss || 0).toFixed(2)}%</span>
         </div>
       </div>
     `;
@@ -239,7 +421,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderTradeTable(res.trades);
 
     // Batch Ticker List
-    const batchSection = document.getElementById('batch-ticker-section');
     const batchList = document.getElementById('batch-ticker-list');
     
     if (res.ticker_results && res.ticker_results.length > 0) {
@@ -248,7 +429,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <label style="display:flex;align-items:center;padding:4px;gap:8px;cursor:pointer;border-bottom:1px solid var(--border)">
           <input type="radio" name="batch-ticker" value="${tr.ticker}" ${idx===0 ? 'checked' : ''}>
           <span style="font-weight:bold">${tr.ticker}</span>
-          <span style="color:var(--text-muted);font-size:11px;margin-left:auto">${tr.trades.length} trades | Ret: <span class="${tr.stats.total_return >= 0 ? 'return-positive' : 'return-negative'}">${tr.stats.total_return}%</span></span>
+          <span style="color:var(--text-muted);font-size:11px;margin-left:auto">${tr.trades.length} trades | Ret: <span class="${tr.stats.total_return >= 0 ? 'return-positive' : 'return-negative'}">${(tr.stats.total_return || 0).toFixed(2)}%</span></span>
         </label>
       `).join('');
       
@@ -307,7 +488,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const retClass = t.return_pct >= 0 ? 'return-positive' : 'return-negative';
       const dirClass = t.direction === 'LONG' ? 'direction-long' : 'direction-short';
       const ret = `${t.return_pct >= 0 ? '+' : ''}${t.return_pct?.toFixed(2)}%`;
-      const mfe = t.mfe ? `+${t.mfe.toFixed(1)}%` : '—';
+      const mfe = t.mfe ? `+${t.mfe.toFixed(2)}%` : '—';
       // Truncate strategy name
       const strat = t.strategy?.length > 18 ? t.strategy.slice(0, 17) + '…' : t.strategy;
       return `
@@ -366,27 +547,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     a.click();
   });
 
-  // ── Qwen interpret ────────────────────────────────────────────────────────
+  // ── Gemma interpret ───────────────────────────────────────────────────────
   interpretBtn.addEventListener('click', async () => {
-    if (!MIDAS.state.ollamaOnline) {
-      MIDAS.toast('Qwen is offline — start Ollama first', 'warn');
-      return;
-    }
-    if (!MIDAS.state.lastRunId) return;
+    const mode = interpretBtn.dataset.mode === 'scan' ? 'scan' : 'backtest';
+    await requestGemmaInterpretation(mode, interpretBtn, interpretBox);
+  });
 
-    interpretBtn.disabled = true;
-    interpretBtn.innerHTML = '<div class="gemma-spinner" style="width:14px;height:14px;border-width:2px;border-color:var(--gemma-dim);border-top-color:var(--gemma)"></div> Analysing…';
-
-    try {
-      const res = await MIDAS.api('POST', '/gemma/interpret', { run_id: MIDAS.state.lastRunId });
-      interpretBox.textContent = res.interpretation || 'No interpretation returned.';
-      interpretBox.classList.add('visible');
-    } catch (e) {
-      MIDAS.toast(`Qwen error: ${e.message}`, 'error');
-    } finally {
-      interpretBtn.disabled = false;
-      interpretBtn.innerHTML = '<span>🔮</span> Ask Qwen to interpret results';
-    }
+  window.addEventListener('midas:reset', () => {
+    strategySearch.value = '';
+    activeFilter = 'ALL';
+    filterChips.forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.filter === 'ALL');
+    });
+    tradeTbody.innerHTML = '';
+    tradeCountBadge.textContent = '';
+    backtestStats.innerHTML = '';
+    document.getElementById('batch-ticker-list').innerHTML = '';
+    batchSection.classList.add('hidden');
+    resetBacktestPanelForBacktest();
+    renderStrategyList();
   });
 
   // ── Boot ──────────────────────────────────────────────────────────────────

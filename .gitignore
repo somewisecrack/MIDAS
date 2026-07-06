@@ -9,3 +9,13 @@ app.log
 .pytest_cache/
 results/
 SKILL_LIBRARY/**/*.csv
+
+# OS / editor cruft
+.DS_Store
+
+# Local JS test scaffolding (jsdom smoke tests)
+node_modules/
+package.json
+package-lock.json
+test.js
+test2.js

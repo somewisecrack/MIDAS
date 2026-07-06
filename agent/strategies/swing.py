@@ -257,7 +257,8 @@ def vpa_evr_anomaly(df: pd.DataFrame, ticker: str) -> Optional[Dict]:
         last["Spread"] < last["ATR_14"] * 0.5
     ):
         price = last["Close"]
-        stop = last["High"] if last["Close"] > last["Open"] else last["Low"]
+        # Stop loss should be below the candle's low for a LONG trade
+        stop = last["Low"]
         return {
             "ticker": ticker,
             "strategy": "VPA Effort vs Result Anomaly",

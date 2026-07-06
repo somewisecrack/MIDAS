@@ -1,5 +1,5 @@
 /**
- * chat.js — Multi-modal chat interface with Qwen using SSE streaming.
+ * chat.js — Multi-modal chat interface with Gemma using SSE streaming.
  */
 
 document.addEventListener('DOMContentLoaded', () => {

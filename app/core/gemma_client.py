@@ -1,8 +1,8 @@
 """
 gemma_client.py — Thin wrapper around Ollama's HTTP API for MIDAS pattern search
-and result interpretation. Uses Qwen 2.5 VL 32B by default.
+and result interpretation. Uses gemma3:12b by default, falls back to gemma3:4b.
 
-All local model calls are collected synchronously.
+All Gemma calls are collected synchronously.
 Image search encodes a server-side mplfinance PNG as base64.
 """
 import base64
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 import os
 
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
-PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "qwen2.5vl:32b")
-FALLBACK_MODEL = os.environ.get("FALLBACK_MODEL", "qwen2.5vl:7b")
+PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "gemma3:12b")
+FALLBACK_MODEL = os.environ.get("FALLBACK_MODEL", "gemma3:4b")
 TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", 120))
 
 
@@ -132,7 +132,7 @@ If no pattern is found, return: []
 
 def find_pattern_text(ticker: str, data_rows: List[Dict], query: str) -> List[Dict]:
     """
-    Ask the local model to find occurrences of a described pattern in the OHLCV data.
+    Ask Gemma to find occurrences of a described pattern in the OHLCV data.
     Returns list of { start, end, confidence, explanation } dicts.
     """
     # Build a compact data summary (at most 500 rows)
@@ -191,7 +191,7 @@ def find_pattern_image(
     image_date_to: str,
 ) -> List[Dict]:
     """
-    Ask the local vision model to match a chart image against historical OHLCV data.
+    Ask Gemma (vision) to match a chart image against historical OHLCV data.
     image_b64: base64-encoded PNG of the chart window.
     Returns list of { start, end, confidence, explanation } dicts.
     """
@@ -244,6 +244,29 @@ Be direct and specific. Do not use generic disclaimers. Under 250 words.
 """
 
 
+
+_SCAN_INTERPRET_PROMPT = """You are a swing trading scan analyst. You are reviewing the output of a rule-based scan.
+
+Scan Scope: {scope}
+Date Range: {date_from} to {date_to}
+Total Setups: {total_setups}
+Unique Tickers: {unique_tickers}
+Directions: LONG={long_count}, SHORT={short_count}
+Strategies Triggered: {strategies}
+
+Top Scan Results:
+{top_results}
+
+Provide a concise, honest 3-paragraph analysis:
+1. What this scan output says about the current market tone and opportunity set.
+2. Which kinds of setups look most actionable, and which deserve skepticism.
+3. How a swing trader should triage these results for next-step review.
+
+If there are zero setups, explain what that likely implies about market conditions and scan strictness.
+Be direct, specific, and under 220 words.
+"""
+
+
 def interpret_backtest(
     ticker: str,
     date_from: str,
@@ -253,7 +276,7 @@ def interpret_backtest(
     trades: List[Dict],
 ) -> str:
     """
-    Ask the local model to provide a plain-English interpretation of backtest results.
+    Ask Gemma to provide a plain-English interpretation of backtest results.
     Returns the interpretation as a string.
     """
     top_trades = sorted(trades, key=lambda t: t.get("return_pct", 0), reverse=True)[:5]
@@ -278,6 +301,49 @@ def interpret_backtest(
         total_return=stats.get("total_return", 0),
         sharpe=stats.get("sharpe", 0),
         sample_trades=sample_trades,
+    )
+
+    return _generate(prompt)
+
+
+def interpret_scan(
+    scope: str,
+    date_from: str,
+    date_to: str,
+    results: List[Dict],
+) -> str:
+    """
+    Ask Gemma to provide a plain-English interpretation of scan results.
+    Returns the interpretation as a string.
+    """
+    long_count = sum(1 for r in results if str(r.get("direction", "")).upper() == "LONG")
+    short_count = sum(1 for r in results if str(r.get("direction", "")).upper() == "SHORT")
+    strategies = sorted({str(r.get("strategy", "")).strip() for r in results if r.get("strategy")})
+    unique_tickers = len({str(r.get("ticker", "")).strip() for r in results if r.get("ticker")})
+
+    top_results = []
+    for row in results[:12]:
+        ticker = row.get("ticker", "?")
+        strategy = row.get("strategy", "?")
+        direction = row.get("direction", "?")
+        close_price = float(row.get("close_price", 0) or 0)
+        entry_price = float(row.get("entry_price", 0) or 0)
+        stop_loss = float(row.get("stop_loss", 0) or 0)
+        top_results.append(
+            f"- {ticker} | {strategy} | {direction} | close {close_price:.2f} | "
+            f"entry {entry_price:.2f} | stop {stop_loss:.2f}"
+        )
+
+    prompt = _SCAN_INTERPRET_PROMPT.format(
+        scope=scope,
+        date_from=date_from,
+        date_to=date_to,
+        total_setups=len(results),
+        unique_tickers=unique_tickers,
+        long_count=long_count,
+        short_count=short_count,
+        strategies=", ".join(strategies) if strategies else "(none)",
+        top_results="\n".join(top_results) if top_results else "- No setups triggered",
     )
 
     return _generate(prompt)

@@ -2,7 +2,7 @@
 gemma.py — /api/gemma/* endpoints: pattern search (text + image), interpretation.
 Gracefully handles Ollama being offline — returns 503 with clear message.
 
-Despite the legacy module name, MIDAS now defaults to Qwen via Ollama.
+MIDAS uses Gemma via Ollama for pattern search and interpretation.
 """
 import base64
 import logging
@@ -16,6 +16,7 @@ from app.core.gemma_client import (
     find_pattern_text,
     find_pattern_image,
     interpret_backtest,
+    interpret_scan,
 )
 from app.core.data_service import load_from_cache, resolve_preset
 from app.core.chart_renderer import render_window_png
@@ -32,7 +33,7 @@ def _require_ollama():
             status_code=503,
             detail={
                 "error": "Ollama is not running.",
-                "fix": "Run: ollama serve  (then: ollama pull qwen2.5vl:32b)",
+                "fix": "Run: ollama serve  (then: ollama pull gemma3:12b)",
             },
         )
     return status
@@ -48,6 +49,13 @@ class TextPatternRequest(BaseModel):
 
 class InterpretRequest(BaseModel):
     run_id: str
+
+
+class ScanInterpretRequest(BaseModel):
+    scope: str
+    date_from: str
+    date_to: str
+    results: List[dict]
 
 
 class ChatMessage(BaseModel):
@@ -171,7 +179,7 @@ async def chat_stream(req: ChatRequest):
 
 @router.post("/pattern/text")
 async def pattern_text(req: TextPatternRequest):
-    """Find historical occurrences of a described pattern using the local Qwen model."""
+    """Find historical occurrences of a described pattern using Gemma."""
     _require_ollama()
 
     if req.preset:
@@ -217,7 +225,7 @@ async def pattern_image(
     image_date_to: Optional[str] = Form(None),
     file: UploadFile = File(...),
 ):
-    """Find patterns similar to an uploaded chart image using the local Qwen vision model."""
+    """Find patterns similar to an uploaded chart image using Gemma vision."""
     _require_ollama()
 
     if preset:
@@ -261,7 +269,7 @@ async def pattern_image(
 
 @router.post("/interpret")
 async def interpret(req: InterpretRequest):
-    """Ask Qwen for a plain-English interpretation of a backtest run."""
+    """Ask Gemma for a plain-English interpretation of a backtest run."""
     _require_ollama()
 
     run = get_backtest_run(req.run_id)
@@ -281,6 +289,24 @@ async def interpret(req: InterpretRequest):
         raise HTTPException(status_code=503, detail=str(e))
 
     return {"run_id": req.run_id, "interpretation": text}
+
+
+@router.post("/interpret-scan")
+async def interpret_scan_results(req: ScanInterpretRequest):
+    """Ask Gemma for a plain-English interpretation of scan results."""
+    _require_ollama()
+
+    try:
+        text = interpret_scan(
+            scope=req.scope,
+            date_from=req.date_from,
+            date_to=req.date_to,
+            results=req.results,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    return {"scope": req.scope, "interpretation": text, "count": len(req.results)}
 
 
 @router.get("/chart/{ticker}")
