@@ -336,7 +336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       backtestRunning.classList.add('hidden');
       MIDAS.showChartView?.();
 
-      if (!res.trades || res.trades.length === 0) {
+      if ((!res.trades || res.trades.length === 0) && !res.portfolio_strategy) {
         backtestEmpty.classList.remove('hidden');
         backtestEmpty.querySelector('.empty-text').textContent =
           'No signals fired for this strategy/ticker/range combination.';
@@ -345,16 +345,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       renderResults(res);
-      MIDASChart.addTradeMarkers(res.trades);
+      if (!res.portfolio_strategy) {
+        MIDASChart.addTradeMarkers(res.trades);
+      }
       if (res.equity_curve && res.equity_curve.length > 1) {
         MIDASChart.showEquityCurve(res.equity_curve);
       }
 
       // Auto-save notice
-      MIDAS.toast(
-        `Backtest complete — ${res.trades.length} trades | Win rate: ${(res.stats.win_rate || 0).toFixed(2)}%`,
-        'success',
-      );
+      const completeMsg = res.portfolio_strategy
+        ? `Portfolio backtest complete — Return on capital: ${(res.stats.profit_on_contributions || res.stats.total_return || 0).toFixed(2)}%`
+        : `Backtest complete — ${res.trades.length} trades | Win rate: ${(res.stats.win_rate || 0).toFixed(2)}%`;
+      MIDAS.toast(completeMsg, 'success');
 
       // Refresh history panel
       if (window.MIDASHistory) MIDASHistory.reload();
@@ -371,6 +373,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     const s = res.stats;
 
     resetBacktestPanelForBacktest();
+
+    if (res.portfolio_strategy) {
+      const ret = s.profit_on_contributions ?? s.total_return ?? 0;
+      const retColor = ret >= 0 ? 'positive' : 'negative';
+      backtestStats.innerHTML = `
+        <div class="stat-card">
+          <div class="stat-label">Portfolio Periods</div>
+          <div class="stat-value gold">${s.total_trades || 0}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Ending Value</div>
+          <div class="stat-value gold">$${(s.ending_value || 0).toFixed(2)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Contributed</div>
+          <div class="stat-value">$${(s.total_contributed || 0).toFixed(2)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Profit</div>
+          <div class="stat-value ${s.profit >= 0 ? 'positive' : 'negative'}">${s.profit >= 0 ? '+' : ''}$${(s.profit || 0).toFixed(2)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Return on Capital</div>
+          <div class="stat-value ${retColor}">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Max Drawdown</div>
+          <div class="stat-value negative">${(s.max_drawdown || 0).toFixed(2)}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Period Return</div>
+          <div class="stat-value ${s.avg_return >= 0 ? 'positive' : 'negative'}">${s.avg_return >= 0 ? '+' : ''}${(s.avg_return || 0).toFixed(2)}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sharpe</div>
+          <div class="stat-value">${(s.sharpe || 0).toFixed(2)}</div>
+        </div>
+      `;
+      tradeCountBadge.textContent = `(${res.trades?.length || 0} legs)`;
+      renderTradeTable(res.trades || []);
+      batchSection.classList.add('hidden');
+      backtestResults.classList.remove('hidden');
+      interpretBtn.disabled = false;
+      return;
+    }
 
     // Stats cards
     const pfColor = s.profit_factor >= 1.5 ? 'gold' : s.profit_factor >= 1 ? '' : 'negative';

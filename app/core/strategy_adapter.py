@@ -31,6 +31,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from agent.strategies.swing import SWING_STRATEGIES
+from app.core.spy_momentum import DYNAMIC_ID, STATIC_ID
 
 
 @dataclass
@@ -102,6 +103,28 @@ for _s in SWING_STRATEGIES:
     except Exception:
         pass
     _REGISTRY[_meta.id] = _meta
+
+_REGISTRY[STATIC_ID] = StrategyMeta(
+    id=STATIC_ID,
+    name="SPY MOMENTUM-2 Static",
+    priority="ELITE",
+    win_rate="Portfolio",
+    holding_period="Monthly",
+    direction_hint="BOTH",
+    description="Monthly S&P 500 long/short momentum portfolio: long top 2 prior 2-day gainers and short bottom 2 prior 2-day losers, fixed starting capital.",
+    func=None,
+)
+
+_REGISTRY[DYNAMIC_ID] = StrategyMeta(
+    id=DYNAMIC_ID,
+    name="SPY MOMENTUM-2 Dynamic",
+    priority="ELITE",
+    win_rate="Portfolio",
+    holding_period="Monthly + Add",
+    direction_hint="BOTH",
+    description="Monthly S&P 500 long/short momentum portfolio: long top 2 prior 2-day gainers and short bottom 2 prior 2-day losers, adding the same capital each monthly rebalance.",
+    func=None,
+)
 
 
 def list_strategies() -> List[Dict]:

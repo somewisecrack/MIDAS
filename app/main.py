@@ -3,12 +3,13 @@ main.py — FastAPI application factory for MIDAS web app.
 Serves the API + static frontend from a single process.
 """
 import logging
+import re
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 
 from app.core.db import init_db
 from app.api.data import router as data_router
@@ -24,6 +25,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Matches any /static/*.js or /static/*.css reference, with or without an
+# existing ?v= token, so the token can be regenerated on every request.
+_ASSET_REF = re.compile(r"""(/static/[^"'?\s]+?\.(?:js|css))(\?v=[^"']*)?""")
+
+
+def _asset_version(url_path: str) -> str | None:
+    """Cache-busting token for a /static asset, derived from its mtime."""
+    asset = STATIC_DIR / url_path.removeprefix("/static/")
+    try:
+        return str(int(asset.stat().st_mtime))
+    except OSError:
+        return None
+
+
+def render_index() -> str:
+    """
+    Serve index.html with every JS/CSS URL stamped by the asset's mtime.
+
+    Editing a frontend file therefore changes its URL automatically, so browsers
+    can never run a stale bundle against newer markup. Nothing needs a manual
+    version bump.
+    """
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+
+    def stamp(match: re.Match) -> str:
+        url_path = match.group(1)
+        version = _asset_version(url_path)
+        return f"{url_path}?v={version}" if version else match.group(0)
+
+    return _ASSET_REF.sub(stamp, html)
 
 
 def create_app() -> FastAPI:
@@ -85,9 +117,14 @@ def create_app() -> FastAPI:
         async def serve_spa(full_path: str):
             """Serve index.html for any unmatched route (SPA catch-all)."""
             index = STATIC_DIR / "index.html"
-            if index.exists():
-                return FileResponse(index)
-            return {"error": "Frontend not found. Ensure app/static/index.html exists."}
+            if not index.exists():
+                return {"error": "Frontend not found. Ensure app/static/index.html exists."}
+            # index.html must never be cached, or the browser would keep reusing
+            # an old copy and never see the freshly stamped asset URLs.
+            return HTMLResponse(
+                render_index(),
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
 
     return app
 

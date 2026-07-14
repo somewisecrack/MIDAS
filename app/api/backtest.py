@@ -9,6 +9,11 @@ from pydantic import BaseModel
 
 from app.core.backtest_engine import run_backtest
 from app.core.data_service import load_from_cache, rows_to_dataframe, resolve_preset
+from app.core.spy_momentum import (
+    is_spy_momentum_strategy,
+    run_spy_momentum_backtest,
+    current_month_scan,
+)
 from app.core.db import (
     save_backtest_run,
     list_backtest_runs,
@@ -54,6 +59,33 @@ async def run(req: BacktestRequest):
         (get_strategy(sid).name if get_strategy(sid) else sid)
         for sid in req.strategy_ids
     ]
+
+    portfolio_strategy_ids = [sid for sid in req.strategy_ids if is_spy_momentum_strategy(sid)]
+    if portfolio_strategy_ids:
+        if len(req.strategy_ids) > 1:
+            raise HTTPException(status_code=422, detail="SPY MOMENTUM portfolio strategies must be backtested one at a time.")
+        sid = portfolio_strategy_ids[0]
+        result = run_spy_momentum_backtest(sid, date_from, date_to)
+        if "error" in result:
+            return {"status": "warning", **result}
+        run_id = save_backtest_run(
+            ticker="SP500",
+            strategy_names=strategy_names,
+            date_from=date_from,
+            date_to=date_to,
+            stats=result["stats"],
+            trades=result["trades"],
+            label=req.label or strategy_names[0],
+        )
+        return {
+            "status": "ok",
+            "run_id": run_id,
+            "ticker": "SP500",
+            "date_from": date_from,
+            "date_to": date_to,
+            "strategies": strategy_names,
+            **result,
+        }
 
     # S&P 500 override
     if req.sp500:
@@ -189,9 +221,6 @@ async def run_scan(req: BacktestRequest):
     if not req.strategy_ids:
         raise HTTPException(status_code=422, detail="At least one strategy_id required.")
 
-    if not req.sp500 and not req.tickers:
-        raise HTTPException(status_code=422, detail="Scan requires sp500 or batch tickers")
-
     from app.core.strategy_adapter import scan_strategy, get_strategy
     from app.core.data_service import fetch_and_cache
 
@@ -201,6 +230,28 @@ async def run_scan(req: BacktestRequest):
         date_from, date_to = req.date_from, req.date_to
     else:
         date_from, date_to = resolve_preset("1Y")
+
+    portfolio_strategy_ids = [sid for sid in req.strategy_ids if is_spy_momentum_strategy(sid)]
+    if portfolio_strategy_ids:
+        if len(req.strategy_ids) > 1:
+            raise HTTPException(status_code=422, detail="SPY MOMENTUM portfolio strategies must be scanned one at a time.")
+        sid = portfolio_strategy_ids[0]
+        try:
+            scan = current_month_scan(sid)
+        except Exception as e:
+            logger.error(f"SPY MOMENTUM scan failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "status": "ok",
+            "date_from": date_from,
+            "date_to": date_to,
+            "entry_date": scan["entry_date"],
+            "rank_asof": scan["rank_asof"],
+            "results": scan["results"],
+        }
+
+    if not req.sp500 and not req.tickers:
+        raise HTTPException(status_code=422, detail="Scan requires sp500 or batch tickers")
 
     if req.sp500:
         from agent.data_loader import get_sp500_tickers
