@@ -11,10 +11,14 @@ SPY MOMENTUM-2 Dynamic:
 Both variants rank current S&P 500 constituents by the prior 2 trading-day
 adjusted-close return ending on the previous trading day, then long the top 2
 and short the bottom 2.
+
+SPY_MOMENTUM_2D8_LONG_ONLY:
+    Start with fixed capital, add the same amount at every later monthly
+    rebalance, then long the top 8 prior 2-day gainers.
 """
 import logging
 from dataclasses import dataclass, asdict
-from datetime import date, timedelta
+from datetime import date
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -27,11 +31,20 @@ logger = logging.getLogger(__name__)
 
 STATIC_ID = "spy_momentum_2_static"
 DYNAMIC_ID = "spy_momentum_2_dynamic"
-STRATEGY_IDS = {STATIC_ID, DYNAMIC_ID}
+LONG_ONLY_2D8_ID = "spy_momentum_2d8_long_only"
+STRATEGY_IDS = {STATIC_ID, DYNAMIC_ID, LONG_ONLY_2D8_ID}
 INITIAL_CAPITAL = 1000.0
 MONTHLY_CONTRIBUTION = 1000.0
 LOOKBACK_TRADING_DAYS = 2
-BASKET_SIZE = 2
+DEFAULT_BASKET_SIZE = 2
+LONG_ONLY_BASKET_SIZE = 8
+
+
+@dataclass(frozen=True)
+class MomentumConfig:
+    long_count: int
+    short_count: int
+    dynamic: bool
 
 
 @dataclass
@@ -64,7 +77,23 @@ def strategy_name(strategy_id: str) -> str:
         return "SPY MOMENTUM-2 Static"
     if strategy_id == DYNAMIC_ID:
         return "SPY MOMENTUM-2 Dynamic"
+    if strategy_id == LONG_ONLY_2D8_ID:
+        return "SPY_MOMENTUM_2D8_LONG_ONLY"
     return strategy_id
+
+
+def _strategy_config(strategy_id: str) -> MomentumConfig:
+    if strategy_id == LONG_ONLY_2D8_ID:
+        return MomentumConfig(
+            long_count=LONG_ONLY_BASKET_SIZE,
+            short_count=0,
+            dynamic=True,
+        )
+    return MomentumConfig(
+        long_count=DEFAULT_BASKET_SIZE,
+        short_count=DEFAULT_BASKET_SIZE,
+        dynamic=strategy_id == DYNAMIC_ID,
+    )
 
 
 def _download_close_prices(tickers: List[str], start: str, end: str) -> pd.DataFrame:
@@ -101,7 +130,12 @@ def _month_start_rebalances(prices: pd.DataFrame, date_from: str, date_to: str) 
     return [pd.Timestamp(x) for x in starts.tolist()]
 
 
-def _select_baskets(prices: pd.DataFrame, entry_date: pd.Timestamp) -> Tuple[List[str], List[str], pd.Series, pd.Timestamp]:
+def _select_baskets(
+    prices: pd.DataFrame,
+    entry_date: pd.Timestamp,
+    long_count: int,
+    short_count: int,
+) -> Tuple[List[str], List[str], pd.Series, pd.Timestamp]:
     entry_loc = prices.index.get_loc(entry_date)
     rank_end_loc = entry_loc - 1
     rank_start_loc = rank_end_loc - LOOKBACK_TRADING_DAYS
@@ -112,11 +146,11 @@ def _select_baskets(prices: pd.DataFrame, entry_date: pd.Timestamp) -> Tuple[Lis
     rank_end = prices.index[rank_end_loc]
     returns = prices.iloc[rank_end_loc] / prices.iloc[rank_start_loc] - 1.0
     returns = returns.replace([float("inf"), float("-inf")], pd.NA).dropna()
-    if len(returns) < BASKET_SIZE * 2:
+    if len(returns) < long_count + short_count:
         raise ValueError("Insufficient valid symbols for momentum ranking.")
 
-    longs = returns.nlargest(BASKET_SIZE).index.tolist()
-    shorts = returns.nsmallest(BASKET_SIZE).index.tolist()
+    longs = returns.nlargest(long_count).index.tolist()
+    shorts = returns.nsmallest(short_count).index.tolist() if short_count else []
     return longs, shorts, returns, rank_end
 
 
@@ -198,7 +232,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
         return {"trades": [], "stats": _compute_stats([], 0, [], 1), "equity_curve": [], "error": "No trading days in selected range."}
 
     strategy = strategy_name(strategy_id)
-    dynamic = strategy_id == DYNAMIC_ID
+    config = _strategy_config(strategy_id)
     value = 0.0
     total_contributed = 0.0
     initialized = False
@@ -212,7 +246,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
         if next_date <= entry_date:
             continue
 
-        contribution = INITIAL_CAPITAL if not initialized else (MONTHLY_CONTRIBUTION if dynamic else 0.0)
+        contribution = INITIAL_CAPITAL if not initialized else (MONTHLY_CONTRIBUTION if config.dynamic else 0.0)
         value += contribution
         total_contributed += contribution
         if not initialized:
@@ -220,7 +254,12 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
             initialized = True
 
         try:
-            longs, shorts, rank_returns, rank_asof = _select_baskets(prices, entry_date)
+            longs, shorts, rank_returns, rank_asof = _select_baskets(
+                prices,
+                entry_date,
+                config.long_count,
+                config.short_count,
+            )
         except ValueError as exc:
             logger.warning("Skipping %s rebalance: %s", entry_date.date(), exc)
             continue
@@ -230,7 +269,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
         longs = [t for t in longs if t in period_prices.columns]
         shorts = [t for t in shorts if t in period_prices.columns]
         names = longs + shorts
-        if len(names) < BASKET_SIZE * 2 or len(period_prices) < 2:
+        if len(longs) < config.long_count or len(shorts) < config.short_count or len(period_prices) < 2:
             continue
 
         ret = _period_return(period_prices, longs, shorts)
@@ -261,7 +300,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
                 mfe=0.0,
                 mae=0.0,
                 confidence=80,
-                signal=f"Top {BASKET_SIZE} S&P momentum long as of {rank_asof.date()}",
+                signal=f"Top {config.long_count} S&P momentum long as of {rank_asof.date()}",
                 reasoning=f"Prior {LOOKBACK_TRADING_DAYS}-trading-day return {rank_returns[ticker] * 100:.2f}%; leg notional ${leg_notional:.2f}.",
             ))
         for ticker in shorts:
@@ -284,7 +323,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
                 mfe=0.0,
                 mae=0.0,
                 confidence=80,
-                signal=f"Bottom {BASKET_SIZE} S&P momentum short as of {rank_asof.date()}",
+                signal=f"Bottom {config.short_count} S&P momentum short as of {rank_asof.date()}",
                 reasoning=f"Prior {LOOKBACK_TRADING_DAYS}-trading-day return {rank_returns[ticker] * 100:.2f}%; leg notional ${leg_notional:.2f}.",
             ))
 
@@ -321,7 +360,13 @@ def current_month_scan(strategy_id: str, date_to: Optional[str] = None) -> Dict:
     if month_days.empty:
         raise ValueError("No trading day found for current month.")
     entry_date = pd.Timestamp(month_days[0])
-    longs, shorts, rank_returns, rank_asof = _select_baskets(prices, entry_date)
+    config = _strategy_config(strategy_id)
+    longs, shorts, rank_returns, rank_asof = _select_baskets(
+        prices,
+        entry_date,
+        config.long_count,
+        config.short_count,
+    )
     strategy = strategy_name(strategy_id)
     results = []
     for ticker in longs:
@@ -334,7 +379,7 @@ def current_month_scan(strategy_id: str, date_to: Optional[str] = None) -> Dict:
             "entry_price": close_price,
             "stop_loss": 0.0,
             "confidence": 80,
-            "reasoning": f"Top 2 S&P 500 prior {LOOKBACK_TRADING_DAYS}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
+            "reasoning": f"Top {config.long_count} S&P 500 prior {LOOKBACK_TRADING_DAYS}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
         })
     for ticker in shorts:
         close_price = float(prices.loc[rank_asof, ticker])
@@ -346,7 +391,7 @@ def current_month_scan(strategy_id: str, date_to: Optional[str] = None) -> Dict:
             "entry_price": close_price,
             "stop_loss": 0.0,
             "confidence": 80,
-            "reasoning": f"Bottom 2 S&P 500 prior {LOOKBACK_TRADING_DAYS}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
+            "reasoning": f"Bottom {config.short_count} S&P 500 prior {LOOKBACK_TRADING_DAYS}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
         })
     return {
         "results": results,

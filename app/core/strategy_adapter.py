@@ -31,7 +31,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from agent.strategies.swing import SWING_STRATEGIES
-from app.core.spy_momentum import DYNAMIC_ID, STATIC_ID
+from app.core.spy_momentum import DYNAMIC_ID, LONG_ONLY_2D8_ID, STATIC_ID
 
 
 @dataclass
@@ -123,6 +123,17 @@ _REGISTRY[DYNAMIC_ID] = StrategyMeta(
     holding_period="Monthly + Add",
     direction_hint="BOTH",
     description="Monthly S&P 500 long/short momentum portfolio: long top 2 prior 2-day gainers and short bottom 2 prior 2-day losers, adding the same capital each monthly rebalance.",
+    func=None,
+)
+
+_REGISTRY[LONG_ONLY_2D8_ID] = StrategyMeta(
+    id=LONG_ONLY_2D8_ID,
+    name="SPY_MOMENTUM_2D8_LONG_ONLY",
+    priority="ELITE",
+    win_rate="Portfolio",
+    holding_period="Monthly + Add",
+    direction_hint="LONG",
+    description="Monthly S&P 500 long-only momentum portfolio: long the top 8 prior 2-day gainers, adding the same capital each monthly rebalance.",
     func=None,
 )
 
