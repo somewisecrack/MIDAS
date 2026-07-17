@@ -41,9 +41,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── Render strategy cards ─────────────────────────────────────────────────
   function renderStrategyList() {
     const query = strategySearch.value.toLowerCase().trim();
+    const normalizeSearch = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const normalizedQuery = normalizeSearch(query);
 
     const filtered = allStrategies.filter(s => {
-      const matchSearch = !query || s.name.toLowerCase().includes(query);
+      const searchable = `${s.name || ''} ${s.id || ''}`;
+      const matchSearch =
+        !query ||
+        searchable.toLowerCase().includes(query) ||
+        normalizeSearch(searchable).includes(normalizedQuery);
       const matchFilter =
         activeFilter === 'ALL' ||
         s.priority === activeFilter ||
