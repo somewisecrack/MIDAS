@@ -237,7 +237,7 @@ async def run_scan(req: BacktestRequest):
             raise HTTPException(status_code=422, detail="SPY MOMENTUM portfolio strategies must be scanned one at a time.")
         sid = portfolio_strategy_ids[0]
         try:
-            scan = current_month_scan(sid)
+            scan = current_month_scan(sid, date_from=date_from, date_to=date_to)
         except Exception as e:
             logger.error(f"SPY MOMENTUM scan failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))

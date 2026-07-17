@@ -349,24 +349,29 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
     }
 
 
-def current_month_scan(strategy_id: str, date_to: Optional[str] = None) -> Dict:
-    today = pd.Timestamp(date_to or date.today().isoformat())
-    first_calendar_day = today.replace(day=1)
-    fetch_start = (first_calendar_day - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
-    fetch_end = (today + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+def current_month_scan(
+    strategy_id: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> Dict:
+    entry_anchor = pd.Timestamp(date_from or date_to or date.today().isoformat())
+    config = _strategy_config(strategy_id)
+    fetch_start = (entry_anchor - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+    fetch_end = (entry_anchor + pd.Timedelta(days=7)).strftime("%Y-%m-%d")
     tickers = get_sp500_tickers()
     prices = _download_close_prices(tickers, fetch_start, fetch_end)
-    month_days = prices.index[prices.index >= first_calendar_day]
-    if month_days.empty:
-        raise ValueError("No trading day found for current month.")
-    entry_date = pd.Timestamp(month_days[0])
-    config = _strategy_config(strategy_id)
+
+    entry_days = prices.index[prices.index >= entry_anchor]
+    if entry_days.empty:
+        raise ValueError("No trading day found on or after selected start date.")
+    entry_date = pd.Timestamp(entry_days[0])
     longs, shorts, rank_returns, rank_asof = _select_baskets(
         prices,
         entry_date,
         config.long_count,
         config.short_count,
     )
+
     strategy = strategy_name(strategy_id)
     results = []
     for ticker in longs:
