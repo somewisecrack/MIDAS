@@ -104,6 +104,17 @@ for _s in SWING_STRATEGIES:
         pass
     _REGISTRY[_meta.id] = _meta
 
+_REGISTRY[LONG_ONLY_2D8_ID] = StrategyMeta(
+    id=LONG_ONLY_2D8_ID,
+    name="SPY MOMENTUM-2D8 Long Only",
+    priority="ELITE",
+    win_rate="Portfolio",
+    holding_period="Monthly + Add",
+    direction_hint="LONG",
+    description="SPY_MOMENTUM_2D8_LONG_ONLY: monthly S&P 500 long-only momentum portfolio; long the top 8 prior 2-day gainers, adding the same capital each monthly rebalance.",
+    func=None,
+)
+
 _REGISTRY[STATIC_ID] = StrategyMeta(
     id=STATIC_ID,
     name="SPY MOMENTUM-2 Static",
@@ -123,17 +134,6 @@ _REGISTRY[DYNAMIC_ID] = StrategyMeta(
     holding_period="Monthly + Add",
     direction_hint="BOTH",
     description="Monthly S&P 500 long/short momentum portfolio: long top 2 prior 2-day gainers and short bottom 2 prior 2-day losers, adding the same capital each monthly rebalance.",
-    func=None,
-)
-
-_REGISTRY[LONG_ONLY_2D8_ID] = StrategyMeta(
-    id=LONG_ONLY_2D8_ID,
-    name="SPY_MOMENTUM_2D8_LONG_ONLY",
-    priority="ELITE",
-    win_rate="Portfolio",
-    holding_period="Monthly + Add",
-    direction_hint="LONG",
-    description="Monthly S&P 500 long-only momentum portfolio: long the top 8 prior 2-day gainers, adding the same capital each monthly rebalance.",
     func=None,
 )
 

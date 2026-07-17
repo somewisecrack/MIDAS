@@ -78,7 +78,7 @@ def strategy_name(strategy_id: str) -> str:
     if strategy_id == DYNAMIC_ID:
         return "SPY MOMENTUM-2 Dynamic"
     if strategy_id == LONG_ONLY_2D8_ID:
-        return "SPY_MOMENTUM_2D8_LONG_ONLY"
+        return "SPY MOMENTUM-2D8 Long Only"
     return strategy_id
 
 
