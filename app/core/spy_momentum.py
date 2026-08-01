@@ -15,6 +15,14 @@ and short the bottom 2.
 SPY_MOMENTUM_2D8_LONG_ONLY:
     Start with fixed capital, add the same amount at every later monthly
     rebalance, then long the top 8 prior 2-day gainers.
+
+SPY_MOMENTUM_20D5_LONG_ONLY:
+    Start with fixed capital, add the same amount at every later monthly
+    rebalance, then long the top 5 prior 20-day gainers.
+
+All variants are defined by a row in _PROFILES (lookback, long/short basket
+sizes, monthly-contribution behaviour, display name); the backtest and scan
+paths are shared and carry no per-strategy branching.
 """
 import logging
 from dataclasses import dataclass, asdict
@@ -32,19 +40,31 @@ logger = logging.getLogger(__name__)
 STATIC_ID = "spy_momentum_2_static"
 DYNAMIC_ID = "spy_momentum_2_dynamic"
 LONG_ONLY_2D8_ID = "spy_momentum_2d8_long_only"
-STRATEGY_IDS = {STATIC_ID, DYNAMIC_ID, LONG_ONLY_2D8_ID}
+LONG_ONLY_20D5_ID = "spy_momentum_20d5_long_only"
 INITIAL_CAPITAL = 1000.0
 MONTHLY_CONTRIBUTION = 1000.0
-LOOKBACK_TRADING_DAYS = 2
-DEFAULT_BASKET_SIZE = 2
-LONG_ONLY_BASKET_SIZE = 8
 
 
 @dataclass(frozen=True)
 class MomentumConfig:
+    name: str
+    lookback_days: int
     long_count: int
     short_count: int
     dynamic: bool
+
+
+# One profile per SPY momentum variant. Adding a variant is a single row here:
+# ranking lookback, basket sizes, and monthly-contribution behaviour are all
+# data-driven, so the backtest and scan paths need no per-strategy branching.
+_PROFILES: Dict[str, MomentumConfig] = {
+    STATIC_ID:         MomentumConfig("SPY MOMENTUM-2 Static", 2, 2, 2, dynamic=False),
+    DYNAMIC_ID:        MomentumConfig("SPY MOMENTUM-2 Dynamic", 2, 2, 2, dynamic=True),
+    LONG_ONLY_2D8_ID:  MomentumConfig("SPY MOMENTUM-2D8 Long Only", 2, 8, 0, dynamic=True),
+    LONG_ONLY_20D5_ID: MomentumConfig("SPY MOMENTUM-20D5 Long Only", 20, 5, 0, dynamic=True),
+}
+
+STRATEGY_IDS = set(_PROFILES)
 
 
 @dataclass
@@ -69,35 +89,23 @@ class PortfolioLeg:
 
 
 def is_spy_momentum_strategy(strategy_id: str) -> bool:
-    return strategy_id in STRATEGY_IDS
+    return strategy_id in _PROFILES
 
 
 def strategy_name(strategy_id: str) -> str:
-    if strategy_id == STATIC_ID:
-        return "SPY MOMENTUM-2 Static"
-    if strategy_id == DYNAMIC_ID:
-        return "SPY MOMENTUM-2 Dynamic"
-    if strategy_id == LONG_ONLY_2D8_ID:
-        return "SPY MOMENTUM-2D8 Long Only"
-    return strategy_id
+    config = _PROFILES.get(strategy_id)
+    return config.name if config else strategy_id
 
 
 def _strategy_config(strategy_id: str) -> MomentumConfig:
-    if strategy_id == LONG_ONLY_2D8_ID:
-        return MomentumConfig(
-            long_count=LONG_ONLY_BASKET_SIZE,
-            short_count=0,
-            dynamic=True,
-        )
-    return MomentumConfig(
-        long_count=DEFAULT_BASKET_SIZE,
-        short_count=DEFAULT_BASKET_SIZE,
-        dynamic=strategy_id == DYNAMIC_ID,
-    )
+    return _PROFILES[strategy_id]
 
 
-def _download_close_prices(tickers: List[str], start: str, end: str) -> pd.DataFrame:
-    fetch_start = (pd.Timestamp(start) - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+def _download_close_prices(tickers: List[str], start: str, end: str, lookback_days: int = 2) -> pd.DataFrame:
+    # Pad the fetch window so there is enough pre-entry history to rank on the
+    # lookback. Trading days ≈ calendar days * 5/7, plus a holiday buffer.
+    pad_days = max(30, lookback_days * 2 + 15)
+    fetch_start = (pd.Timestamp(start) - pd.Timedelta(days=pad_days)).strftime("%Y-%m-%d")
     fetch_end = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     raw = yf.download(
         tickers,
@@ -135,10 +143,11 @@ def _select_baskets(
     entry_date: pd.Timestamp,
     long_count: int,
     short_count: int,
+    lookback_days: int,
 ) -> Tuple[List[str], List[str], pd.Series, pd.Timestamp]:
     entry_loc = prices.index.get_loc(entry_date)
     rank_end_loc = entry_loc - 1
-    rank_start_loc = rank_end_loc - LOOKBACK_TRADING_DAYS
+    rank_start_loc = rank_end_loc - lookback_days
     if rank_start_loc < 0:
         raise ValueError("Insufficient pre-entry history for momentum ranking.")
 
@@ -225,14 +234,14 @@ def _compute_stats(equity_curve: List[Dict], total_contributed: float, period_re
 
 
 def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) -> Dict:
+    config = _strategy_config(strategy_id)
+    strategy = strategy_name(strategy_id)
     tickers = get_sp500_tickers()
-    prices = _download_close_prices(tickers, date_from, date_to)
+    prices = _download_close_prices(tickers, date_from, date_to, config.lookback_days)
     rebalances = _month_start_rebalances(prices, date_from, date_to)
     if not rebalances:
         return {"trades": [], "stats": _compute_stats([], 0, [], 1), "equity_curve": [], "error": "No trading days in selected range."}
 
-    strategy = strategy_name(strategy_id)
-    config = _strategy_config(strategy_id)
     value = 0.0
     total_contributed = 0.0
     initialized = False
@@ -259,6 +268,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
                 entry_date,
                 config.long_count,
                 config.short_count,
+                config.lookback_days,
             )
         except ValueError as exc:
             logger.warning("Skipping %s rebalance: %s", entry_date.date(), exc)
@@ -301,7 +311,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
                 mae=0.0,
                 confidence=80,
                 signal=f"Top {config.long_count} S&P momentum long as of {rank_asof.date()}",
-                reasoning=f"Prior {LOOKBACK_TRADING_DAYS}-trading-day return {rank_returns[ticker] * 100:.2f}%; leg notional ${leg_notional:.2f}.",
+                reasoning=f"Prior {config.lookback_days}-trading-day return {rank_returns[ticker] * 100:.2f}%; leg notional ${leg_notional:.2f}.",
             ))
         for ticker in shorts:
             entry_price = float(period_prices[ticker].iloc[0])
@@ -324,7 +334,7 @@ def run_spy_momentum_backtest(strategy_id: str, date_from: str, date_to: str) ->
                 mae=0.0,
                 confidence=80,
                 signal=f"Bottom {config.short_count} S&P momentum short as of {rank_asof.date()}",
-                reasoning=f"Prior {LOOKBACK_TRADING_DAYS}-trading-day return {rank_returns[ticker] * 100:.2f}%; leg notional ${leg_notional:.2f}.",
+                reasoning=f"Prior {config.lookback_days}-trading-day return {rank_returns[ticker] * 100:.2f}%; leg notional ${leg_notional:.2f}.",
             ))
 
         holdings.append({
@@ -354,12 +364,16 @@ def current_month_scan(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> Dict:
-    entry_anchor = pd.Timestamp(date_from or date_to or date.today().isoformat())
     config = _strategy_config(strategy_id)
-    fetch_start = (entry_anchor - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
-    fetch_end = (entry_anchor + pd.Timedelta(days=7)).strftime("%Y-%m-%d")
+    # Anchor the scan on the selected start date (date_from), not "today".
+    entry_anchor = pd.Timestamp(date_from or date_to or date.today().isoformat())
     tickers = get_sp500_tickers()
-    prices = _download_close_prices(tickers, fetch_start, fetch_end)
+    prices = _download_close_prices(
+        tickers,
+        entry_anchor.strftime("%Y-%m-%d"),
+        (entry_anchor + pd.Timedelta(days=7)).strftime("%Y-%m-%d"),
+        config.lookback_days,
+    )
 
     entry_days = prices.index[prices.index >= entry_anchor]
     if entry_days.empty:
@@ -370,6 +384,7 @@ def current_month_scan(
         entry_date,
         config.long_count,
         config.short_count,
+        config.lookback_days,
     )
 
     strategy = strategy_name(strategy_id)
@@ -384,7 +399,7 @@ def current_month_scan(
             "entry_price": close_price,
             "stop_loss": 0.0,
             "confidence": 80,
-            "reasoning": f"Top {config.long_count} S&P 500 prior {LOOKBACK_TRADING_DAYS}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
+            "reasoning": f"Top {config.long_count} S&P 500 prior {config.lookback_days}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
         })
     for ticker in shorts:
         close_price = float(prices.loc[rank_asof, ticker])
@@ -396,7 +411,7 @@ def current_month_scan(
             "entry_price": close_price,
             "stop_loss": 0.0,
             "confidence": 80,
-            "reasoning": f"Bottom {config.short_count} S&P 500 prior {LOOKBACK_TRADING_DAYS}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
+            "reasoning": f"Bottom {config.short_count} S&P 500 prior {config.lookback_days}-trading-day momentum as of {rank_asof.date()} ({rank_returns[ticker] * 100:.2f}%).",
         })
     return {
         "results": results,
