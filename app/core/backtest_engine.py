@@ -255,6 +255,8 @@ def run_batch_backtest(
         res = run_backtest(ticker, strategy_ids, df, date_from, date_to)
         
         if "error" not in res:
+            strategies_with_signals += int(res.get("stats", {}).get("strategies_with_signals", 0) or 0)
+
             # We reconstruct Trade objects from dicts to merge them
             for t_dict in res["trades"]:
                 all_trades.append(Trade(**t_dict))
@@ -269,10 +271,12 @@ def run_batch_backtest(
     # Sort all combined trades by entry date
     all_trades.sort(key=lambda t: t.entry_date)
     
-    # Recalculate combined stats
-    # For batch, strategies_run is strategy_ids * number of successful tickers
-    # Wait, we can just pass the count
-    stats = _compute_stats(all_trades, len(strategy_ids) * len(ticker_results), 0) # simplified signals count
+    # Recalculate combined stats across every successful ticker/strategy pair.
+    stats = _compute_stats(
+        all_trades,
+        len(strategy_ids) * len(ticker_results),
+        strategies_with_signals,
+    )
     
     # Portfolio equity curve
     equity_curve = _compute_equity_curve(all_trades)

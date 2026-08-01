@@ -247,6 +247,7 @@ async def run_scan(req: BacktestRequest):
             "date_to": date_to,
             "entry_date": scan["entry_date"],
             "rank_asof": scan["rank_asof"],
+            "scan_asof": scan["rank_asof"],
             "results": scan["results"],
         }
 

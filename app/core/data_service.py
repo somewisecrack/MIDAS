@@ -5,7 +5,7 @@ Uses SQLite as the primary cache. yfinance is only called when cache is missing/
 import io
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -28,9 +28,32 @@ DATE_PRESETS: Dict[str, Optional[int]] = {
 STALE_THRESHOLD_HOURS = 24
 
 
+def _yfinance_end(date_to: str) -> str:
+    """Convert MIDAS inclusive date_to into yfinance's exclusive end date."""
+    return str(pd.Timestamp(date_to).date() + timedelta(days=1))
+
+
+def _cache_required_max_date(date_to: str) -> str:
+    """
+    Return the latest daily bar date needed for cache coverage.
+
+    The UI often requests "today". On weekends there is no daily bar for today,
+    so a cache ending on the most recent weekday should satisfy the request.
+    This avoids repeated refetches that can never produce a Saturday/Sunday bar.
+    """
+    requested = pd.Timestamp(date_to).date()
+    today = date.today()
+    if requested >= today:
+        expected = today
+        while expected.weekday() >= 5:
+            expected -= timedelta(days=1)
+        return str(expected)
+    return date_to
+
+
 def resolve_preset(preset: str) -> Tuple[str, str]:
     """Convert a preset label to (date_from, date_to) ISO strings."""
-    today = datetime.utcnow().date()
+    today = date.today()
     years = DATE_PRESETS.get(preset.upper())
     if years is None:
         date_from = "1990-01-01"
@@ -51,7 +74,8 @@ def fetch_and_cache(ticker: str, date_from: str, date_to: str, force: bool = Fal
     # Check if cache covers the requested range
     if not force:
         existing = get_ticker_date_range(ticker)
-        if existing and existing["min_date"] <= date_from and existing["max_date"] >= date_to:
+        required_max_date = _cache_required_max_date(date_to)
+        if existing and existing["min_date"] <= date_from and existing["max_date"] >= required_max_date:
             logger.info("Cache hit for %s %s→%s", ticker, date_from, date_to)
             cached_rows = get_ohlcv(ticker, date_from, date_to)
             return {"rows": len(cached_rows), "cached": True, "ticker": ticker,
@@ -62,7 +86,7 @@ def fetch_and_cache(ticker: str, date_from: str, date_to: str, force: bool = Fal
         raw = yf.download(
             ticker,
             start=date_from,
-            end=date_to,
+            end=_yfinance_end(date_to),
             interval="1d",
             progress=False,
             auto_adjust=True,

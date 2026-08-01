@@ -218,8 +218,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const scan = MIDAS.state.lastScanResult;
         res = await MIDAS.api('POST', '/gemma/interpret-scan', {
           scope: interpretBtn.dataset.scope || 'Scan',
-          date_from: scan.date_from,
-          date_to: scan.date_to,
+          date_from: scan.scan_asof || scan.rank_asof || scan.date_from,
+          date_to: scan.scan_asof || scan.rank_asof || scan.date_to,
           results: scan.results || [],
         });
       } else {
@@ -246,6 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const scope = MIDAS.state.sp500Mode
       ? 'S&P 500 scan'
       : `Batch scan (${MIDAS.state.batchTickers.length} tickers)`;
+    const scanAsOf = res.scan_asof || res.rank_asof || res.date_to || 'N/A';
 
     backtestStats.innerHTML = `
       <div class="stat-card">
@@ -255,6 +256,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="stat-card">
         <div class="stat-label">Setups</div>
         <div class="stat-value gold">${results.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">As Of</div>
+        <div class="stat-value" style="font-size:14px">${scanAsOf}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Tickers</div>

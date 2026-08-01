@@ -373,13 +373,19 @@ window.MIDAS = (() => {
   }
 
   // ── Date utilities ────────────────────────────────────────────────────────
+  function formatLocalDate(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   function today() {
-    return new Date().toISOString().slice(0, 10);
+    return formatLocalDate(new Date());
   }
 
   function presetToDates(preset) {
     const now = new Date();
-    const toStr = d => d.toISOString().slice(0, 10);
     const presets = {
       '1Y':  () => { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return d; },
       '3Y':  () => { const d = new Date(now); d.setFullYear(d.getFullYear() - 3); return d; },
@@ -388,8 +394,8 @@ window.MIDAS = (() => {
       'MAX': () => new Date('1990-01-01'),
     };
     const fn = presets[preset];
-    if (!fn) return { from: toStr(presets['1Y']()), to: toStr(now) };
-    return { from: toStr(fn()), to: toStr(now) };
+    if (!fn) return { from: formatLocalDate(presets['1Y']()), to: formatLocalDate(now) };
+    return { from: formatLocalDate(fn()), to: formatLocalDate(now) };
   }
 
   function switchPanel(panelName) {
