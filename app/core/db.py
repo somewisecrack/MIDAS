@@ -14,9 +14,26 @@ _PROJECT_ROOT = Path(__file__).parent.parent.parent
 DB_PATH = _PROJECT_ROOT / "data" / "midas.db"
 
 
+class _Connection(sqlite3.Connection):
+    """
+    Connection that closes itself when used as a context manager.
+
+    Plain sqlite3 connections only commit/rollback on ``with`` exit — they do
+    NOT close. Every helper here uses ``with get_conn() as conn:``, so without
+    this the connections leaked until the process ran out of file descriptors
+    and every query failed with "unable to open database file".
+    """
+
+    def __exit__(self, *exc):
+        try:
+            super().__exit__(*exc)
+        finally:
+            self.close()
+
+
 def get_conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, factory=_Connection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
