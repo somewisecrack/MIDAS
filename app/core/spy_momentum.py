@@ -163,6 +163,29 @@ def _select_baskets(
     return longs, shorts, returns, rank_end
 
 
+def _select_baskets_asof(
+    prices: pd.DataFrame,
+    rank_asof: pd.Timestamp,
+    long_count: int,
+    short_count: int,
+    lookback_days: int,
+) -> Tuple[List[str], List[str], pd.Series, pd.Timestamp]:
+    rank_end_loc = prices.index.get_loc(rank_asof)
+    rank_start_loc = rank_end_loc - lookback_days
+    if rank_start_loc < 0:
+        raise ValueError("Insufficient pre-scan history for momentum ranking.")
+
+    rank_start = prices.index[rank_start_loc]
+    returns = prices.iloc[rank_end_loc] / prices.iloc[rank_start_loc] - 1.0
+    returns = returns.replace([float("inf"), float("-inf")], pd.NA).dropna()
+    if len(returns) < long_count + short_count:
+        raise ValueError("Insufficient valid symbols for momentum ranking.")
+
+    longs = returns.nlargest(long_count).index.tolist()
+    shorts = returns.nsmallest(short_count).index.tolist() if short_count else []
+    return longs, shorts, returns, rank_asof
+
+
 def _leg_return(entry_price: float, exit_price: float, direction: str) -> float:
     if entry_price == 0:
         return 0.0
@@ -365,27 +388,27 @@ def current_month_scan(
     date_to: Optional[str] = None,
 ) -> Dict:
     config = _strategy_config(strategy_id)
-    # Anchor the scan on the selected start date (date_from), not "today".
-    entry_anchor = pd.Timestamp(date_from or date_to or date.today().isoformat())
     tickers = get_sp500_tickers()
+    today = pd.Timestamp(date.today().isoformat())
     prices = _download_close_prices(
         tickers,
-        entry_anchor.strftime("%Y-%m-%d"),
-        (entry_anchor + pd.Timedelta(days=7)).strftime("%Y-%m-%d"),
+        today.strftime("%Y-%m-%d"),
+        today.strftime("%Y-%m-%d"),
         config.lookback_days,
     )
 
-    entry_days = prices.index[prices.index >= entry_anchor]
-    if entry_days.empty:
-        raise ValueError("No trading day found on or after selected start date.")
-    entry_date = pd.Timestamp(entry_days[0])
-    longs, shorts, rank_returns, rank_asof = _select_baskets(
+    scan_days = prices.index[prices.index <= today]
+    if scan_days.empty:
+        raise ValueError("No trading day found on or before today.")
+    rank_asof = pd.Timestamp(scan_days[-1])
+    longs, shorts, rank_returns, rank_asof = _select_baskets_asof(
         prices,
-        entry_date,
+        rank_asof,
         config.long_count,
         config.short_count,
         config.lookback_days,
     )
+    entry_date = rank_asof
 
     strategy = strategy_name(strategy_id)
     results = []
